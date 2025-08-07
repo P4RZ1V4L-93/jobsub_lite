@@ -165,23 +165,23 @@ class SubmittedJob(Job):
         rs = jobsub_call(args, True)
         return rs
 
-    @as_span("SubmittedJob.hold", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.hold", arg_attrs=["*"])
     def hold(self, verbose: int = 0) -> str:
         """Hold this job with jobsub_hold"""
         return self._cmd(verbose, ["jobsub_hold"])
 
-    @as_span("SubmittedJob.release", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.release", arg_attrs=["*"])
     def release(self, verbose: int = 0) -> str:
         """Release this job with jobsub_release"""
         return self._cmd(verbose, ["jobsub_release"])
 
     # pylint: disable=invalid-name
-    @as_span("SubmittedJob.rm", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.rm", arg_attrs=["*"])
     def rm(self, verbose: int = 0) -> str:
         """Remove this job with jobsub_rm"""
         return self._cmd(verbose, ["jobsub_rm"])
 
-    @as_span("SubmittedJob.q", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.q", arg_attrs=["*"])
     def q(self, verbose: int = 0) -> None:
         """run 'jobsub_q' on this job and update values, status"""
         rs = self._cmd(verbose, ["jobsub_q"])
@@ -208,7 +208,7 @@ class SubmittedJob(Job):
             return
         raise JobsubAPIError(f"failed jobsub_q:\n {rs}")
 
-    @as_span("SubmittedJob.q_long", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.q_long", arg_attrs=["*"])
     def q_long(self, verbose: int = 0) -> Dict[str, str]:
         """run 'jobsub_q --long' on this job and update values, status,
         and return the dictionary of name/value pairs from the ouput"""
@@ -239,12 +239,12 @@ class SubmittedJob(Job):
             )
         return res
 
-    @as_span("SubmittedJob.q_analyze", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.q_analyze", arg_attrs=["*"])
     def q_analyze(self, verbose: int = 0) -> str:
         """run jobsub_q --better-analyze on the job and return results"""
         return self._cmd(verbose, ["jobsub_q", "--better-analyze"])
 
-    @as_span("SubmittedJob.wait", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.wait", arg_attrs=["*"])
     def wait(self, howoften: int = 300, verbose: int = 0) -> None:
         """poll with q() every howoften seconds until the job
         is COMPLETED, HELD, or REMOVED"""
@@ -262,13 +262,13 @@ class SubmittedJob(Job):
         if verbose:
             print("", end="\r")
 
-    @as_span("SubmittedJob.find_dag_jobs")
+    @as_span("jobsub_api.SubmittedJob.find_dag_jobs")
     def find_dag_jobs(self) -> None:
         self.dagjobs = q(
             group=self.group, name=self.schedd, constraint=f"DAGManJobId=={self.seq}"
         )
 
-    @as_span("SubmittedJob.fetchlog", arg_attrs=["*"])
+    @as_span("jobsub_api.SubmittedJob.fetchlog", arg_attrs=["*"])
     def fetchlog(
         self, destdir: str = "", condor: bool = False, verbose: int = 0
     ) -> str:
