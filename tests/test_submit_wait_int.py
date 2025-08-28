@@ -38,16 +38,17 @@ else:
 
 @pytest.fixture
 def add_links():
-    # add symlink and harlink in dagnabbit directory for tarfile tests
-    os.system("/bin/pwd")
+    # add symlink and hardlink in dagnabbit directory for tarfile tests
     f = "dagnabbit/jobA.sh"
     slf = "dagnabbit/test_symlink"
     hlf = "dagnabbit/test_hardlink"
     if not os.path.exists(slf):
-        os.symlink("jobA.sh", slf)
+        os.symlink(f, slf)
     if not os.path.exists(hlf):
-        os.link(f, str(hlf))
-    return True
+        os.link(f, hlf)
+    yield True
+    os.unlink(slf)
+    os.unlink(hlf)
 
 
 @pytest.fixture
