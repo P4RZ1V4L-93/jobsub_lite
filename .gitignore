@@ -1,0 +1,17 @@
+# Any build artifacts
+*.rpm
+
+# Common vscode files
+.vscode/
+launch.json
+settings.json
+
+# pycache
+__pycache__/*
+lib/__pycache__/*
+lib/mains/__pycache__/*
+tests/__pycache__/*
+
+# Test artifacts
+tests/*.tbz2
+tests/dagnabbit/*.tbz2

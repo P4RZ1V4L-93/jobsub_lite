@@ -38,16 +38,17 @@ else:
 
 @pytest.fixture
 def add_links():
-    # add symlink and harlink in dagnabbit directory for tarfile tests
-    os.system("/bin/pwd")
+    # add symlink and hardlink in dagnabbit directory for tarfile tests
     f = "dagnabbit/jobA.sh"
     slf = "dagnabbit/test_symlink"
     hlf = "dagnabbit/test_hardlink"
     if not os.path.exists(slf):
         os.symlink("jobA.sh", slf)
     if not os.path.exists(hlf):
-        os.link(f, str(hlf))
-    return True
+        os.link(f, hlf)
+    yield True
+    os.unlink(slf)
+    os.unlink(hlf)
 
 
 @pytest.fixture
@@ -250,7 +251,7 @@ def test_condor_submit_dag1(samdev):
 def lookaround_launch(extra, verify_files=""):
     """Simple submit of our lookaround script"""
     assert run_launch(
-        f"jobsub_submit --mail-never --verbose=2 -e SAM_EXPERIMENT {extra} file://`pwd`/job_scripts/lookaround.sh {verify_files}"
+        f"jobsub_submit --auth-methods=token --mail-never --verbose=2 -e SAM_EXPERIMENT {extra} file://`pwd`/job_scripts/lookaround.sh {verify_files}"
     )
 
 
