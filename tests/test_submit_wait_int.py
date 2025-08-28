@@ -43,7 +43,7 @@ def add_links():
     slf = "dagnabbit/test_symlink"
     hlf = "dagnabbit/test_hardlink"
     if not os.path.exists(slf):
-        os.symlink(f, slf)
+        os.symlink("jobA.sh", slf)
     if not os.path.exists(hlf):
         os.link(f, hlf)
     yield True
