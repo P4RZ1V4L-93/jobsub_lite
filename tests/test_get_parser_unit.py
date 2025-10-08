@@ -329,24 +329,6 @@ def schedd_for_testing_arg_parser():
     return parser
 
 
-@pytest.fixture
-def check_valid_auth_method_arg_parser():
-    """This fixture sets up a lightweight ArgumentParser to test the --auth-methods flag"""
-    import argparse
-
-    import creds
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--auth-methods",
-        action=get_parser.CheckIfValidAuthMethod,
-        default=os.environ.get(
-            "JOBSUB_AUTH_METHODS", ",".join(creds.SUPPORTED_AUTH_METHODS)
-        ),
-    )
-    return parser
-
-
 class TestGetParserUnit:
     """
     Use with pytest... unit tests for ../lib/*.py
@@ -595,21 +577,32 @@ class TestGetParserUnit:
             )
 
     @pytest.mark.unit
+    def test_no_auth_method_given(self, monkeypatch):
+        """If no auth method is given, either on the command line or in the environment,
+        we should get REQUIRED_AUTH_METHODS stored as the value of args.auth_methods"""
+        from creds import REQUIRED_AUTH_METHODS
+
+        monkeypatch.delenv("JOBSUB_AUTH_METHODS", raising=False)
+        args = get_parser.get_base_parser().parse_args([])
+        assert sorted(args.auth_methods.split(",")) == sorted(REQUIRED_AUTH_METHODS)
+
+    @pytest.mark.unit
     @pytest.mark.parametrize(
         "auth_methods_args_test_case",
         get_auth_methods_test_data_good(),
     )
     def test_CheckIfValidAuthMethod_good(
-        self, auth_methods_args_test_case, check_valid_auth_method_arg_parser
+        self,
+        auth_methods_args_test_case,
     ):
         """For valid auth method combinations, make sure we get the right
         auth methods stored by the parser"""
-        args = check_valid_auth_method_arg_parser.parse_args(
+
+        args = get_parser.get_base_parser().parse_args(
             ["--auth-methods", auth_methods_args_test_case.cmdline_args]
         )
-        assert (
-            args.auth_methods.split(",").sort()
-            == auth_methods_args_test_case.auth_methods_result.split(",").sort()
+        assert sorted(args.auth_methods.split(",")) == sorted(
+            auth_methods_args_test_case.auth_methods_result.split(",")
         )
 
     @pytest.mark.unit
@@ -617,9 +610,7 @@ class TestGetParserUnit:
         "auth_methods_args_test_case",
         get_auth_methods_test_data_bad(),
     )
-    def test_CheckIfValidAuthMethod_bad(
-        self, auth_methods_args_test_case, check_valid_auth_method_arg_parser
-    ):
+    def test_CheckIfValidAuthMethod_bad(self, auth_methods_args_test_case):
         """For invalid auth method argument values, make sure we get a TypeError
         raised that either includes the invalid method, or tells us what the required
         auth methods are"""
@@ -629,7 +620,7 @@ class TestGetParserUnit:
             ValueError,
             match=rf"({auth_methods_args_test_case.bad_auth_method}|{REQUIRED_AUTH_METHODS})",
         ):
-            check_valid_auth_method_arg_parser.parse_args(
+            get_parser.get_base_parser().parse_args(
                 ["--auth-methods", auth_methods_args_test_case.cmdline_args]
             )
 
@@ -638,25 +629,16 @@ class TestGetParserUnit:
         "auth_method_env_setting",
         ["token,proxy", "token", "icansneakthisinbydesign,token"],
     )
-    def test_set_auth_methods_environ(
-        self, auth_method_env_setting, check_valid_auth_method_arg_parser
-    ):
+    def test_set_auth_methods_environ(self, monkeypatch, auth_method_env_setting):
         """Check that we can set the auth methods via the environment variable
         JOBSUB_AUTH_METHODS.  Test both a valid case and invalid.  The latter
         would be caught by the underlying library code, by design"""
-        old_auth_methods_env_value = os.environ.pop("JOBSUB_AUTH_METHODS", None)
-
-        # Valid case
-        os.environ["JOBSUB_AUTH_METHODS"] = auth_method_env_setting
-        args = check_valid_auth_method_arg_parser.parse_args([])
-        try:
-            assert (
-                args.auth_methods.split(",").sort()
-                == auth_method_env_setting.split(",").sort()
-            )
-        finally:
-            if old_auth_methods_env_value:
-                os.environ["JOBSUB_AUTH_METHODS"] = old_auth_methods_env_value
+        monkeypatch.setenv("JOBSUB_AUTH_METHODS", auth_method_env_setting)
+        args = get_parser.get_base_parser().parse_args([])
+        assert (
+            args.auth_methods.split(",").sort()
+            == auth_method_env_setting.split(",").sort()
+        )
 
     @pytest.mark.unit
     def test_managed_token_flag_env_set_clean_env(self, monkeypatch):
@@ -716,13 +698,12 @@ class TestGetParserUnit:
         self,
         auth_arg,
         expected_error_context,
-        check_valid_auth_method_arg_parser,
     ):
         """Check to see if we provide an auth method that's either valid or close to a valid one,
         do we either get no error raised or get the "Did you mean" message in the raised ValueError
         """
         with expected_error_context:
-            check_valid_auth_method_arg_parser.parse_args(["--auth-methods", auth_arg])
+            get_parser.get_base_parser().parse_args(["--auth-methods", auth_arg])
 
     @pytest.mark.unit
     def test_version(self, capsys):
