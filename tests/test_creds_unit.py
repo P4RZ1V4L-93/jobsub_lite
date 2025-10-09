@@ -91,3 +91,32 @@ class TestCredUnit:
             "token location: tokenlocation\n" "proxy location: proxylocation\n"
         )
         del os.environ["X509_USER_PROXY"]
+
+    @pytest.mark.unit
+    def test_proxy_doesnt_exist(self, tmp_path):
+        """Check that a non-existent proxy raises the correct Exception"""
+        fake_proxy = tmp_path / "fake_proxy"
+        with pytest.raises(
+            creds.JobsubInvalidProxyError,
+            match=f"The proxy file at {fake_proxy} is invalid: The proxy file does not exist.",
+        ):
+            creds.check_proxy(fake_proxy)
+        with pytest.raises(
+            creds.JobsubInvalidProxyError,
+            match=f"The proxy file at {fake_proxy} is invalid: The proxy file does not exist.",
+        ):
+            creds.check_proxy(str(fake_proxy))
+
+    @pytest.mark.unit
+    def test_proxy_exists_not_readable(self, tmp_path):
+        fake_proxy = tmp_path / "fake_proxy"
+        fake_proxy.touch(mode=0o000)
+        with pytest.raises(
+            creds.JobsubInvalidProxyError,
+            match=f"The proxy file at {fake_proxy} is invalid: The proxy file is not readable by the current user.",
+        ):
+            creds.check_proxy(fake_proxy)
+
+    @pytest.mark.unit
+    def test_proxy_exists_expired(self):
+        pass

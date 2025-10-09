@@ -13,9 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" credential related routines """
+"""credential related routines"""
 import os
-from typing import Any, Dict, Optional, List
+import pathlib
+from typing import Any, Dict, Optional, List, Union
 
 import fake_ifdh
 import packages
@@ -112,3 +113,35 @@ def print_cred_paths_from_credset(cred_set: CredentialSet) -> None:
     """Print out the locations of the various credentials in the credential set"""
     for cred_type, cred_path in vars(cred_set).items():
         print(f"{cred_type} location: {cred_path}")
+
+
+def check_proxy(proxy_file: Union[str, pathlib.Path]) -> None:
+    """
+    Check if the proxy provided is valid
+    1. Check if proxy file exists and is readable
+    2. Check if proxy is a valid VOMS proxy valid for at least 10 more minutes
+    """
+    if isinstance(proxy_file, str):
+        _proxy_file = pathlib.Path(proxy_file)
+    else:
+        _proxy_file = proxy_file
+    if not _proxy_file.exists():
+        raise JobsubInvalidProxyError(
+            "The proxy file does not exist.", str(_proxy_file)
+        )
+    if not os.access(_proxy_file, os.R_OK):
+        raise JobsubInvalidProxyError(
+            "The proxy file is not readable by the current user.", str(_proxy_file)
+        )
+
+
+class JobsubInvalidProxyError(Exception):
+    """Exception raised for invalid proxies"""
+
+    def __init__(self, message: str, proxy_path: str) -> None:
+        self.message = message
+        self.proxy_path = proxy_path
+        super().__init__(self.message)
+
+    def __str__(self) -> str:
+        return f"The proxy file at {self.proxy_path} is invalid: {self.message}"
