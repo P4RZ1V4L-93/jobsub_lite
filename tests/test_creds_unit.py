@@ -118,5 +118,40 @@ class TestCredUnit:
             creds.check_proxy(fake_proxy)
 
     @pytest.mark.unit
-    def test_proxy_exists_expired(self):
-        pass
+    def test_proxy_exists_invalid(self, tmp_path, monkeypatch):
+        # Create fake voms proxy command that always returns 1 for tests
+        old_path = os.environ.get("PATH", "")
+        fake_exe_path = tmp_path
+        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
+        exit_1_script = """#!/bin/bash
+        exit 1
+        """
+        vpi = tmp_path / "voms-proxy-info"
+        vpi.write_text(exit_1_script)
+        vpi.chmod(0o755)
+
+        fake_proxy = tmp_path / "fake_proxy"
+        fake_proxy.touch(mode=0o400)
+
+        with pytest.raises(
+            creds.JobsubInvalidProxyError,
+            match=f"The proxy file at {fake_proxy} is invalid: The proxy is not a valid VOMS proxy or has expired",
+        ):
+            creds.check_proxy(fake_proxy)
+
+    def test_proxy_good(self, tmp_path, monkeypatch):
+        # Create fake voms proxy command that always returns 0 for tests
+        old_path = os.environ.get("PATH", "")
+        fake_exe_path = tmp_path
+        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
+        exit_1_script = """#!/bin/bash
+        exit 0
+        """
+        vpi = tmp_path / "voms-proxy-info"
+        vpi.write_text(exit_1_script)
+        vpi.chmod(0o755)
+
+        fake_proxy = tmp_path / "fake_proxy"
+        fake_proxy.touch(mode=0o400)
+
+        creds.check_proxy(fake_proxy)

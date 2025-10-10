@@ -14,8 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """credential related routines"""
+import io
 import os
 import pathlib
+import shlex
+import subprocess
+import sys
 from typing import Any, Dict, Optional, List, Union
 
 import fake_ifdh
@@ -115,24 +119,84 @@ def print_cred_paths_from_credset(cred_set: CredentialSet) -> None:
         print(f"{cred_type} location: {cred_path}")
 
 
-def check_proxy(proxy_file: Union[str, pathlib.Path]) -> None:
+def check_proxy(proxy_file: Union[str, pathlib.Path], verbose: int = 0) -> None:
     """
-    Check if the proxy provided is valid
-    1. Check if proxy file exists and is readable
-    2. Check if proxy is a valid VOMS proxy valid for at least 10 more minutes
+    Check that the provided proxy file is valid.
+    Args:
+
+        proxy_file (Union[str, pathlib.Path]): Path to the proxy file to be checked.
+        verbose (int, optional): Verbosity level for command output. Defaults to 0.
+
+    Raises:
+        JobsubInvalidProxyError: If the proxy file does not exist, is not readable,
+        or is not a valid VOMS proxy.
     """
     if isinstance(proxy_file, str):
         _proxy_file = pathlib.Path(proxy_file)
     else:
         _proxy_file = proxy_file
-    if not _proxy_file.exists():
+
+    check_proxy_file(_proxy_file)  # Does proxy file exist, and is it readable?
+    check_valid_proxy(_proxy_file, verbose)
+
+
+def check_proxy_file(proxy_file: pathlib.Path) -> None:
+    """
+    Checks whether the specified proxy file exists and is readable.
+
+    Args:
+        proxy_file (pathlib.Path): The path to the proxy file to check.
+
+    Raises:
+        JobsubInvalidProxyError: If the proxy file does not exist or is not readable by the current user.
+    """
+    if not proxy_file.exists():
+        raise JobsubInvalidProxyError("The proxy file does not exist.", str(proxy_file))
+    if not os.access(proxy_file, os.R_OK):
         raise JobsubInvalidProxyError(
-            "The proxy file does not exist.", str(_proxy_file)
+            "The proxy file is not readable by the current user.", str(proxy_file)
         )
-    if not os.access(_proxy_file, os.R_OK):
+
+
+def check_valid_proxy(proxy_file: pathlib.Path, verbose: int = 0) -> None:
+    """
+    Checks if the provided proxy file is a valid and non-expired VOMS proxy.
+
+    Args:
+        proxy_file (pathlib.Path): Path to the proxy file to be validated.
+        verbose (int, optional): Verbosity level for command output. Defaults to 0.
+
+    Raises:
+        JobsubInvalidProxyError: If the proxy is not a valid VOMS proxy or has expired.
+    """
+    chk_cmd_str = f"voms-proxy-info -exists -valid 0:10 -file {str(proxy_file)}"
+    extra_check_args = _generate_proxy_command_verbose_args(chk_cmd_str, verbose)
+    try:
+        subprocess.run(shlex.split(chk_cmd_str), check=True, **extra_check_args)
+    except subprocess.CalledProcessError as e:
         raise JobsubInvalidProxyError(
-            "The proxy file is not readable by the current user.", str(_proxy_file)
-        )
+            "The proxy is not a valid VOMS proxy or has expired", str(proxy_file)
+        ) from e
+
+
+def _generate_proxy_command_verbose_args(
+    cmd_str: str, verbose: int = 0
+) -> Dict[str, Any]:
+    # Helper function to handle verbose and regular mode
+    if verbose > 0:
+        # Caller that sets up command will write stdout to stderr
+        # Equivalent of >&2
+        sys.stderr.write(f"Running: {cmd_str}\n")
+        if isinstance(sys.stderr, io.StringIO):
+            # being called from jobsub_api...
+            return {}
+        return {"stdout": sys.stderr}
+    # Caller that sets up command will write stdout to /dev/null, stderr to stdout
+    # Equivalent of >/dev/null 2>&1
+    return {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.STDOUT,
+    }
 
 
 class JobsubInvalidProxyError(Exception):
