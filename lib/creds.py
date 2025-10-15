@@ -27,7 +27,6 @@ import packages
 from tracing import as_span
 
 
-DEFAULT_AUTH_METHODS = ["token", "proxy"]
 REQUIRED_AUTH_METHODS = [
     value.strip()
     for value in os.environ.get("JOBSUB_REQUIRED_AUTH_METHODS", "token").split(",")
@@ -78,13 +77,12 @@ def get_creds(args: Dict[str, Any] = {}) -> CredentialSet:
     role = fake_ifdh.getRole(args.get("role", None))
     args["role"] = role
 
-    auth_methods: List[str] = SUPPORTED_AUTH_METHODS
-
-    if os.environ.get("JOBSUB_AUTH_METHODS", False):
-        auth_methods = os.environ["JOBSUB_AUTH_METHODS"].split(",")
-
+    # Set our auth_methods: Precedence:  --auth-methods, JOBSUB_AUTH_METHODS, REQUIRED_AUTH_METHODS
+    auth_methods: List[str] = REQUIRED_AUTH_METHODS
     if args.get("auth_methods", None):
         auth_methods = str(args.get("auth_methods")).split(",")
+    elif os.environ.get("JOBSUB_AUTH_METHODS", False):
+        auth_methods = os.environ["JOBSUB_AUTH_METHODS"].split(",")
 
     # One last check to make sure we have the required auth methods
     if len(set(REQUIRED_AUTH_METHODS).intersection(set(auth_methods))) == 0:
