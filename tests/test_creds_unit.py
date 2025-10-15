@@ -328,3 +328,26 @@ class TestCredUnit:
     ):
         with pytest.raises(creds.JobsubInvalidProxyError, match="does not exist"):
             creds.get_creds(proxy_test_hypot_pro_args)
+
+
+@pytest.mark.parametrize(
+    "cmdline_arg,env_var,expected",
+    [
+        ("flag_setting1,flag_setting2", "", ["flag_setting1", "flag_setting2"]),
+        (None, "env_setting1,env_setting2", ["env_setting1", "env_setting2"]),
+        ("flag_setting", "env_setting", ["flag_setting"]),
+        ("setting", "setting", ["setting"]),
+        (None, None, creds.REQUIRED_AUTH_METHODS),
+    ],
+)
+@pytest.mark.unit
+def test_resolve_auth_methods(cmdline_arg, env_var, expected, monkeypatch):
+    """
+    --auth-methods
+    JOBSUB_AUTH_METHODS
+    REQUIRED_AUTH_METHODS
+    """
+    if env_var is not None:
+        monkeypatch.setenv("JOBSUB_AUTH_METHODS", env_var)
+    methods = creds.resolve_auth_methods(cmdline_arg)
+    assert methods == expected

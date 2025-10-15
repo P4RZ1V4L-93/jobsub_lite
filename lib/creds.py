@@ -78,11 +78,7 @@ def get_creds(args: Dict[str, Any] = {}) -> CredentialSet:
     args["role"] = role
 
     # Set our auth_methods: Precedence:  --auth-methods, JOBSUB_AUTH_METHODS, REQUIRED_AUTH_METHODS
-    auth_methods: List[str] = REQUIRED_AUTH_METHODS
-    if args.get("auth_methods", None):
-        auth_methods = str(args.get("auth_methods")).split(",")
-    elif os.environ.get("JOBSUB_AUTH_METHODS", False):
-        auth_methods = os.environ["JOBSUB_AUTH_METHODS"].split(",")
+    auth_methods = resolve_auth_methods(args.get("auth_methods", None))
 
     # One last check to make sure we have the required auth methods
     if len(set(REQUIRED_AUTH_METHODS).intersection(set(auth_methods))) == 0:
@@ -125,6 +121,16 @@ def print_cred_paths_from_credset(cred_set: CredentialSet) -> None:
     """Print out the locations of the various credentials in the credential set"""
     for cred_type, cred_path in vars(cred_set).items():
         print(f"{cred_type} location: {cred_path}")
+
+
+def resolve_auth_methods(arg_auth_method: Optional[str]) -> List[str]:
+    """Resolve the list of auth methods to use based on the argument and environment variables"""
+    # Set our auth_methods: Precedence:  --auth-methods, JOBSUB_AUTH_METHODS, REQUIRED_AUTH_METHODS
+    if arg_auth_method is not None:
+        return str(arg_auth_method).split(",")
+    if os.environ.get("JOBSUB_AUTH_METHODS", False):
+        return os.environ["JOBSUB_AUTH_METHODS"].split(",")
+    return REQUIRED_AUTH_METHODS
 
 
 def check_proxy(proxy_file: Union[str, pathlib.Path], verbose: int = 0) -> None:
