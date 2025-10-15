@@ -24,14 +24,21 @@ from test_unit import TestUnit
 
 
 @pytest.fixture
-def fake_proxy(tmp_path):
+def fake_proxy(tmp_path, clear_x509_user_proxy):
     def inner(create_file=True, mode=0o400):
-        fake_proxy = tmp_path / "fake_proxy"
+        _fake_proxy = tmp_path / "fake_proxy"
         if create_file:
-            fake_proxy.touch(mode=mode)
-        return fake_proxy
+            _fake_proxy.touch(mode=mode)
+        return _fake_proxy
 
     return inner
+
+
+@pytest.fixture
+def fake_token(tmp_path, clear_bearer_token_file):
+    _fake_token = tmp_path / "fake_token"
+    _fake_token.touch(mode=0o400)
+    return _fake_token
 
 
 @pytest.fixture
@@ -76,18 +83,26 @@ class TestCredUnit:
     # lib/creds.py routines...
 
     @pytest.mark.unit
-    def test_get_creds_file_exists(self):
+    def test_get_creds_file_exists(
+        self, fake_token, clear_x509_user_proxy, clear_bearer_token_file, monkeypatch
+    ):
         """get credentials, make sure the credentials file returned
-        exist. Default is just to get a token"""
+        exist. Default is to get REQUIRED_AUTH_METHODS which is 'token'"""
+        os.environ["BEARER_TOKEN_FILE"] = os.path.join(
+            os.path.dirname(__file__), "fake_ifdh_tokens", "fermilab.token"
+        )
         os.environ["GROUP"] = TestUnit.test_group
         cred_set = creds.get_creds()
         assert os.path.exists(os.environ["BEARER_TOKEN_FILE"])
         assert os.path.exists(cred_set.token)
 
     @pytest.mark.unit
-    def test_get_creds_default_role_set(self):
-        """get credentials, make sure role is properly set"""
+    def test_get_creds_default_role_set(self, clear_bearer_token_file):
+        """get credentials using one of our fake tokens, make sure role is properly set"""
         args = {"auth_methods": os.environ.get("JOBSUB_AUTH_METHODS", "token")}
+        os.environ["BEARER_TOKEN_FILE"] = os.path.join(
+            os.path.dirname(__file__), "fake_ifdh_tokens", "fermilab.token"
+        )
         os.environ["GROUP"] = TestUnit.test_group
         _ = creds.get_creds(args)
         assert args["role"] == DEFAULT_ROLE
@@ -95,7 +110,7 @@ class TestCredUnit:
     @pytest.mark.unit
     def test_get_creds_token_only(self, clear_x509_user_proxy, clear_bearer_token_file):
         """Get only a token with args.auth_methods = 'token'"""
-        args = {"auth_methods": os.environ.get("JOBSUB_AUTH_METHODS", "token")}
+        args = {"auth_methods": "token"}
         os.environ["GROUP"] = TestUnit.test_group
         cred_set = creds.get_creds(args)
         # Make sure we have a token and the env is set
@@ -115,11 +130,21 @@ class TestCredUnit:
 
     @pytest.mark.unit
     def test_get_creds_proxy_and_token(
-        self, clear_x509_user_proxy, clear_bearer_token_file
+        self,
+        voms_proxy_info_exit_code,
+        clear_x509_user_proxy,
+        clear_bearer_token_file,
+        fake_proxy,
+        fake_token,
     ):
-        """If we specify ONLY a supported auth method that is NOT a required auth method,
-        raise a TypeError"""
         # We will mock voms-proxy-info to always return 0 in these tests
+        voms_proxy_info_exit_code(0)
+        _fake_proxy = fake_proxy()
+
+        os.environ["BEARER_TOKEN_FILE"] = os.path.join(
+            os.path.dirname(__file__), "fake_ifdh_tokens", "fermilab.token"
+        )
+        os.environ["X509_USER_PROXY"] = str(_fake_proxy)
 
         args = {"auth_methods": "proxy,token"}
         os.environ["GROUP"] = TestUnit.test_group
@@ -192,6 +217,16 @@ class TestCredUnit:
     # Integration tests:
 
     # TODO Add pytest-dotenv extension to make these instructions IDE-independent
+
+    @pytest.mark.integration
+    def test_get_creds_file_exists_int(self, clear_x509_user_proxy):
+        """get credentials, make sure the credentials file returned
+        exist. Default is to get REQUIRED_AUTH_METHODS which is 'token'"""
+        os.environ["GROUP"] = TestUnit.test_group
+        cred_set = creds.get_creds()
+        assert os.path.exists(os.environ["BEARER_TOKEN_FILE"])
+        assert os.path.exists(cred_set.token)
+
     @pytest.mark.integration
     def test_proxy_good_int(
         self, set_required_method_proxy_only, proxy_test_hypot_pro_args, monkeypatch
