@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import pytest
 
@@ -18,7 +19,53 @@ if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
 else:
     sys.path.append("../lib")
 import creds
+from fake_ifdh import DEFAULT_ROLE
 from test_unit import TestUnit
+
+
+@pytest.fixture
+def fake_proxy(tmp_path):
+    def inner(create_file=True, mode=0o400):
+        fake_proxy = tmp_path / "fake_proxy"
+        if create_file:
+            fake_proxy.touch(mode=mode)
+        return fake_proxy
+
+    return inner
+
+
+@pytest.fixture
+def voms_proxy_info_exit_code(tmp_path, monkeypatch):
+    def inner(exit_code):
+        old_path = os.environ.get("PATH", "")
+        fake_exe_path = tmp_path
+        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
+        script = f"""#!/bin/bash
+        exit {exit_code}
+        """
+        vpi = tmp_path / "voms-proxy-info"
+        vpi.write_text(script)
+        vpi.chmod(0o755)
+
+    return inner
+
+
+@pytest.fixture
+def set_tmp(monkeypatch, tmp_path):
+    tmp = tmp_path
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    return tmp
+
+
+@pytest.fixture
+def set_required_method_proxy_only(monkeypatch):
+    monkeypatch.setattr(creds, "REQUIRED_AUTH_METHODS", ["proxy"])
+
+
+@pytest.fixture
+def proxy_test_hypot_pro_args(monkeypatch):
+    monkeypatch.setenv("GROUP", "hypot")
+    return {"auth_methods": "proxy", "group": "hypot", "role": "Production"}
 
 
 class TestCredUnit:
@@ -29,47 +76,54 @@ class TestCredUnit:
     # lib/creds.py routines...
 
     @pytest.mark.unit
-    def test_get_creds_1(self):
-        """get credentials, make sure the credentials files returned
-        exist"""
+    def test_get_creds_file_exists(self):
+        """get credentials, make sure the credentials file returned
+        exist. Default is just to get a token"""
         os.environ["GROUP"] = TestUnit.test_group
         cred_set = creds.get_creds()
-        # assert os.path.exists(os.environ["X509_USER_PROXY"])
         assert os.path.exists(os.environ["BEARER_TOKEN_FILE"])
-        # assert os.path.exists(cred_set.proxy)
         assert os.path.exists(cred_set.token)
-        # del os.environ["X509_USER_PROXY"]
 
     @pytest.mark.unit
-    def test_get_creds_default_role(self):
-        """get credentials, make sure the credentials files returned
-        exist"""
+    def test_get_creds_default_role_set(self):
+        """get credentials, make sure role is properly set"""
         args = {"auth_methods": os.environ.get("JOBSUB_AUTH_METHODS", "token")}
         os.environ["GROUP"] = TestUnit.test_group
         _ = creds.get_creds(args)
-        assert args["role"] == "Analysis"
+        assert args["role"] == DEFAULT_ROLE
 
     @pytest.mark.unit
     def test_get_creds_token_only(self, clear_x509_user_proxy, clear_bearer_token_file):
-        """Get only a token"""
+        """Get only a token with args.auth_methods = 'token'"""
         args = {"auth_methods": os.environ.get("JOBSUB_AUTH_METHODS", "token")}
         os.environ["GROUP"] = TestUnit.test_group
         cred_set = creds.get_creds(args)
         # Make sure we have a token and the env is set
         assert os.path.exists(os.environ["BEARER_TOKEN_FILE"])
         assert os.path.exists(cred_set.token)
-        # Make sure the X509_USER_PROXY is not set
+        # Make sure X509_USER_PROXY is not set
         assert os.environ.get("X509_USER_PROXY", None) is None
 
     @pytest.mark.unit
-    def x_test_get_creds_proxy_only(
-        self, clear_x509_user_proxy, clear_bearer_token_file
-    ):
-        """Get only a proxy"""
+    def test_get_creds_proxy_only(self, clear_x509_user_proxy, clear_bearer_token_file):
+        """If we specify ONLY a supported auth method that is NOT a required auth method,
+        raise a TypeError"""
         args = {"auth_methods": "proxy"}
         os.environ["GROUP"] = TestUnit.test_group
         with pytest.raises(TypeError, match="Missing required authorization method"):
             creds.get_creds(args)
+
+    @pytest.mark.unit
+    def test_get_creds_proxy_and_token(
+        self, clear_x509_user_proxy, clear_bearer_token_file
+    ):
+        """If we specify ONLY a supported auth method that is NOT a required auth method,
+        raise a TypeError"""
+        # We will mock voms-proxy-info to always return 0 in these tests
+
+        args = {"auth_methods": "proxy,token"}
+        os.environ["GROUP"] = TestUnit.test_group
+        creds.get_creds(args)
 
     @pytest.mark.unit
     def test_get_creds_invalid_auth(
@@ -93,65 +147,149 @@ class TestCredUnit:
         del os.environ["X509_USER_PROXY"]
 
     @pytest.mark.unit
-    def test_proxy_doesnt_exist(self, tmp_path):
+    def test_proxy_doesnt_exist(self, fake_proxy):
         """Check that a non-existent proxy raises the correct Exception"""
-        fake_proxy = tmp_path / "fake_proxy"
+        _fake_proxy = fake_proxy(create_file=False)
         with pytest.raises(
             creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {fake_proxy} is invalid: The proxy file does not exist.",
+            match=f"The proxy file at {_fake_proxy} is invalid: The proxy file does not exist.",
         ):
-            creds.check_proxy(fake_proxy)
+            creds.check_proxy(_fake_proxy)
         with pytest.raises(
             creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {fake_proxy} is invalid: The proxy file does not exist.",
+            match=f"The proxy file at {_fake_proxy} is invalid: The proxy file does not exist.",
         ):
-            creds.check_proxy(str(fake_proxy))
+            creds.check_proxy(str(_fake_proxy))
 
     @pytest.mark.unit
-    def test_proxy_exists_not_readable(self, tmp_path):
-        fake_proxy = tmp_path / "fake_proxy"
-        fake_proxy.touch(mode=0o000)
+    def test_proxy_exists_not_readable(self, fake_proxy):
+        _fake_proxy = fake_proxy(mode=0o000)
         with pytest.raises(
             creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {fake_proxy} is invalid: The proxy file is not readable by the current user.",
+            match=f"The proxy file at {_fake_proxy} is invalid: The proxy file is not readable by the current user.",
         ):
-            creds.check_proxy(fake_proxy)
+            creds.check_proxy(_fake_proxy)
 
     @pytest.mark.unit
-    def test_proxy_exists_invalid(self, tmp_path, monkeypatch):
+    def test_proxy_exists_invalid(self, voms_proxy_info_exit_code, fake_proxy):
         # Create fake voms proxy command that always returns 1 for tests
-        old_path = os.environ.get("PATH", "")
-        fake_exe_path = tmp_path
-        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
-        exit_1_script = """#!/bin/bash
-        exit 1
-        """
-        vpi = tmp_path / "voms-proxy-info"
-        vpi.write_text(exit_1_script)
-        vpi.chmod(0o755)
-
-        fake_proxy = tmp_path / "fake_proxy"
-        fake_proxy.touch(mode=0o400)
+        voms_proxy_info_exit_code(1)
+        _fake_proxy = fake_proxy()
 
         with pytest.raises(
             creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {fake_proxy} is invalid: The proxy is not a valid VOMS proxy or has expired",
+            match=f"The proxy file at {_fake_proxy} is invalid: The proxy is not a valid VOMS proxy or has expired",
         ):
-            creds.check_proxy(fake_proxy)
+            creds.check_proxy(_fake_proxy)
 
-    def test_proxy_good(self, tmp_path, monkeypatch):
+    @pytest.mark.unit
+    def test_proxy_good(self, voms_proxy_info_exit_code, fake_proxy):
         # Create fake voms proxy command that always returns 0 for tests
-        old_path = os.environ.get("PATH", "")
-        fake_exe_path = tmp_path
-        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
-        exit_1_script = """#!/bin/bash
-        exit 0
+        voms_proxy_info_exit_code(0)
+        _fake_proxy = fake_proxy()
+        creds.check_proxy(_fake_proxy)
+
+    # Integration tests:
+
+    # TODO Add pytest-dotenv extension to make these instructions IDE-independent
+    @pytest.mark.integration
+    def test_proxy_good_int(
+        self, set_required_method_proxy_only, proxy_test_hypot_pro_args, monkeypatch
+    ):
+        """If we have a valid proxy at X509_USER_PROXY, get_creds should return a CredentialSet
+        with the proxy attribute set to the proxy's path.
+
+        This test can be run by either setting the env variable INT_X509_USER_PROXY to point
+        to a valid proxy before running the test, or by creating a .env file in the repository
+        root directory and setting INT_X509_USER_PROXY to point to a valid proxy in that file
+        if using VSCode.
         """
-        vpi = tmp_path / "voms-proxy-info"
-        vpi.write_text(exit_1_script)
-        vpi.chmod(0o755)
+        try:
+            monkeypatch.setenv("X509_USER_PROXY", os.environ["INT_X509_USER_PROXY"])
+        except KeyError:
+            pytest.skip("No INT_X509_USER_PROXY env variable set")
 
-        fake_proxy = tmp_path / "fake_proxy"
-        fake_proxy.touch(mode=0o400)
+        cred_set = creds.get_creds(proxy_test_hypot_pro_args)
+        assert cred_set.proxy == os.environ["INT_X509_USER_PROXY"]
 
-        creds.check_proxy(fake_proxy)
+    @pytest.mark.integration
+    def test_proxy_bad_int(
+        self,
+        fake_proxy,
+        set_required_method_proxy_only,
+        proxy_test_hypot_pro_args,
+        monkeypatch,
+    ):
+        _fake_proxy = fake_proxy()
+        monkeypatch.setenv("X509_USER_PROXY", str(_fake_proxy))
+
+        with pytest.raises(
+            creds.JobsubInvalidProxyError, match="not a valid VOMS proxy"
+        ):
+            creds.get_creds(proxy_test_hypot_pro_args)
+
+    @pytest.mark.integration
+    def test_proxy_doesnt_exist_int(
+        self,
+        fake_proxy,
+        set_required_method_proxy_only,
+        proxy_test_hypot_pro_args,
+        monkeypatch,
+    ):
+        monkeypatch.setenv("X509_USER_PROXY", str(fake_proxy(create_file=False)))
+
+        with pytest.raises(creds.JobsubInvalidProxyError, match="does not exist"):
+            creds.get_creds(proxy_test_hypot_pro_args)
+
+    @pytest.mark.integration
+    def test_proxy_good_default_location_int(
+        self,
+        proxy_test_hypot_pro_args,
+        set_tmp,
+        clear_x509_user_proxy,
+        set_required_method_proxy_only,
+    ):
+        """If we have a valid proxy at the default location, get_creds should return a CredentialSet
+        with the proxy attribute set to the proxy's path.
+
+        This test can be run by either setting the env variable INT_X509_USER_PROXY to point
+        to a valid proxy before running the test, or by creating a .env file in the repository
+        root directory and setting INT_X509_USER_PROXY to point to a valid proxy in that file
+        if using VSCode."""
+        args = proxy_test_hypot_pro_args
+        _fake_proxy = set_tmp / f"x509up_{args['group']}_{args['role']}_{os.getuid()}"
+        try:
+            shutil.copy(os.environ["INT_X509_USER_PROXY"], _fake_proxy)
+        except KeyError:
+            pytest.skip("No INT_X509_USER_PROXY env variable set")
+
+        cred_set = creds.get_creds(args)
+        assert cred_set.proxy == str(_fake_proxy)
+
+    @pytest.mark.integration
+    def test_proxy_bad_default_location_int(
+        self,
+        proxy_test_hypot_pro_args,
+        set_tmp,
+        clear_x509_user_proxy,
+        set_required_method_proxy_only,
+    ):
+        args = proxy_test_hypot_pro_args
+        fake_proxy = set_tmp / f"x509up_{args['group']}_{args['role']}_{os.getuid()}"
+        fake_proxy.touch(0o400)
+
+        with pytest.raises(
+            creds.JobsubInvalidProxyError, match="not a valid VOMS proxy"
+        ):
+            creds.get_creds(args)
+
+    @pytest.mark.integration
+    def test_proxy_doesnt_exist_default_location_int(
+        self,
+        proxy_test_hypot_pro_args,
+        set_tmp,
+        clear_x509_user_proxy,
+        set_required_method_proxy_only,
+    ):
+        with pytest.raises(creds.JobsubInvalidProxyError, match="does not exist"):
+            creds.get_creds(proxy_test_hypot_pro_args)

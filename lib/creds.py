@@ -104,10 +104,20 @@ def get_creds(args: Dict[str, Any] = {}) -> CredentialSet:
         t = t.strip()
         creds_to_return["token"] = t
     if "proxy" in auth_methods:
-        p = fake_ifdh.getProxy(
-            role, args.get("verbose", 0), args.get("force_proxy", False)
+        # User must provide proxy in one of two places:
+        # 1) X509_USER_PROXY environment variable
+        # 2) A proxy file in their default location (usually /tmp/x509up_experiment_role_uid
+        experiment = fake_ifdh.getExp()
+        uid = os.getuid()
+        tmp = fake_ifdh.getTmp()
+        proxy_file = pathlib.Path(
+            os.environ.get(
+                "X509_USER_PROXY",
+                os.path.join(tmp, f"x509up_{experiment}_{role}_{uid}"),
+            ).strip()
         )
-        p = p.strip()
+        check_proxy(proxy_file, args.get("verbose", 0))
+        p = str(proxy_file)
         creds_to_return["proxy"] = p
     obtained_creds = CredentialSet(**creds_to_return)
     return obtained_creds
