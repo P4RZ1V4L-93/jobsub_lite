@@ -94,6 +94,9 @@ def clear_x509_user_proxy():
     old_x509_user_proxy_value = os.environ.pop("X509_USER_PROXY", None)
     yield
 
+    # If our test set X509_USER_PROXY, remove it
+    os.environ.pop("X509_USER_PROXY", None)
+
     if old_x509_user_proxy_value is not None:
         os.environ["X509_USER_PROXY"] = old_x509_user_proxy_value
 
@@ -103,6 +106,9 @@ def clear_bearer_token_file():
     """Clear environment variable BEARER_TOKEN_FILE to test credentials overrides"""
     old_bearer_token_file_value = os.environ.pop("BEARER_TOKEN_FILE", None)
     yield
+
+    # If our test set BEARER_TOKEN_FILE, remove it
+    os.environ.pop("BEARER_TOKEN_FILE", None)
 
     if old_bearer_token_file_value is not None:
         os.environ["BEARER_TOKEN_FILE"] = old_bearer_token_file_value
