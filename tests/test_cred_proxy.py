@@ -82,6 +82,7 @@ class TestCheckProxy:
             match=f"The proxy file at {_fake_proxy} is invalid: The proxy file is not readable by the current user.",
         ):
             cred_proxy.check_proxy(_fake_proxy)
+        _fake_proxy.chmod(0o644)  # reset permissions for cleanup
 
     @pytest.mark.unit
     def test_proxy_exists_invalid(self, voms_proxy_info_exit_code, fake_proxy):
@@ -123,6 +124,7 @@ class TestCheckProxyFile:
             match=f"The proxy file is not readable by the current user",
         ):
             cred_proxy.check_proxy_file(_fake_proxy)
+        _fake_proxy.chmod(0o644)  # reset permissions for cleanup
 
     @pytest.mark.unit
     def test_proxy_good(self, fake_proxy):
