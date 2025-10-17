@@ -31,23 +31,6 @@ import fake_ifdh
 
 
 @pytest.fixture
-def clear_token():
-    if os.environ.get("BEARER_TOKEN_FILE", None):
-        if os.path.exists(os.environ["BEARER_TOKEN_FILE"]):
-            try:
-                os.unlink(os.environ["BEARER_TOKEN_FILE"])
-            except:
-                pass
-        del os.environ["BEARER_TOKEN_FILE"]
-
-
-@pytest.fixture
-def fermilab_token(clear_token, set_group_fermilab):
-    # Get a standard fermilab token for tests
-    return fake_ifdh.getToken("Analysis")
-
-
-@pytest.fixture
 def fake_proxy_path(tmp_path):
     fake_path = tmp_path / "test_proxy"
     if os.path.exists(fake_path):
@@ -452,6 +435,16 @@ class TestGetProxy:
             match="Cigetcert failed to get a proxy due to an unspecified issue",
         ):
             fake_ifdh.getProxy("Analysis")
+def test_getProxy():
+    with pytest.raises(
+        NotImplementedError,
+        match=(
+            "fake_ifdh.getProxy is no longer implemented. "
+            "Please obtain your proxy outside of jobsub, and "
+            "then set X509_USER_PROXY to the path of your proxy."
+        ),
+    ):
+        fake_ifdh.getProxy()
 
 
 @pytest.mark.unit
@@ -462,21 +455,3 @@ def test_cp():
     fake_ifdh.cp(__file__, dest)
     assert os.path.exists(dest)
     os.unlink(dest)
-
-
-@pytest.mark.parametrize(
-    "input, expected, raised_error, match_expr",
-    [
-        (["/fermilab"], ("fermilab", "Analysis"), None, None),
-        (["/fermilab/production", "/fermilab"], ("fermilab", "production"), None, None),
-        (["/hypot"], ("hypot", "Analysis"), None, None),
-        (["hypot"], None, ValueError, r"wlcg\.groups.*token.*malformed"),
-    ],
-)
-@pytest.mark.unit
-def test_get_group_and_role_from_token_claim(input, expected, raised_error, match_expr):
-    if not raised_error:
-        assert fake_ifdh.get_group_and_role_from_token_claim(input) == expected
-    else:
-        with pytest.raises(raised_error, match=match_expr):
-            fake_ifdh.get_group_and_role_from_token_claim(input)

@@ -26,23 +26,19 @@ import re
 import shlex
 import subprocess
 import sys
-import time
-from typing import Union, Optional, List, Dict, Tuple, Any
+from typing import List, Dict, Any
 
-# pylint: disable=import-error
-import jwt  # type: ignore
-import scitokens  # type: ignore
 
 # TODO: Do we need this anymore since we're IN lib?  # pylint: disable=fixme
 PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PREFIX, "lib"))
 
-import htcondor  # type: ignore # pylint: disable=wrong-import-position
-from tracing import as_span, add_event  # pylint: disable=wrong-import-position
-
-VAULT_OPTS = htcondor.param.get("SEC_CREDENTIAL_GETTOKEN_OPTS", "")
-DEFAULT_ROLE = "Analysis"
-
+import creds
+from defaults import DEFAULT_ROLE
+import cred_proxy
+import cred_token
+from tracing import as_span  # pylint: disable=wrong-import-position
+import utils
 
 def init_scitokens() -> None:
     """
@@ -301,96 +297,102 @@ def getToken(role: str = DEFAULT_ROLE, verbose: int = 0) -> str:
 def getProxy(
     role: str = DEFAULT_ROLE, verbose: int = 0, force_proxy: bool = False
 ) -> str:
-    """get path to proxy certificate file and regenerate proxy if needed.
-    Setting force_proxy=True will force regeneration of the proxy"""
+    """Deprecated as of version 1.13"""
+    # """get path to proxy certificate file and regenerate proxy if needed.
+    # Setting force_proxy=True will force regeneration of the proxy"""
 
-    def generate_proxy_command_verbose_args(cmd_str: str) -> Dict[str, Any]:
-        # Helper function to handle verbose and regular mode
-        if verbose > 0:
-            # Caller that sets up command will write stdout to stderr
-            # Equivalent of >&2
-            sys.stderr.write(f"Running: {cmd_str}\n")
-            if isinstance(sys.stderr, io.StringIO):
-                # being called from jobsub_api...
-                return {}
-            return {"stdout": sys.stderr}
-        # Caller that sets up command will write stdout to /dev/null, stderr to stdout
-        # Equivalent of >/dev/null 2>&1
-        return {
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.STDOUT,
-        }
+    raise NotImplementedError(
+        "fake_ifdh.getProxy is no longer implemented. "
+        "Please obtain your proxy outside of jobsub, and "
+        "then set X509_USER_PROXY to the path of your proxy."
+    )
+    # def generate_proxy_command_verbose_args(cmd_str: str) -> Dict[str, Any]:
+    #     # Helper function to handle verbose and regular mode
+    #     if verbose > 0:
+    #         # Caller that sets up command will write stdout to stderr
+    #         # Equivalent of >&2
+    #         sys.stderr.write(f"Running: {cmd_str}\n")
+    #         if isinstance(sys.stderr, io.StringIO):
+    #             # being called from jobsub_api...
+    #             return {}
+    #         return {"stdout": sys.stderr}
+    #     # Caller that sets up command will write stdout to /dev/null, stderr to stdout
+    #     # Equivalent of >/dev/null 2>&1
+    #     return {
+    #         "stdout": subprocess.DEVNULL,
+    #         "stderr": subprocess.STDOUT,
+    #     }
 
-    pid = os.getuid()
-    tmp = getTmp()
-    exp = getExp()
-    if exp == "samdev":
-        issuer = "fermilab"
-        igroup = "fermilab"
-    elif exp in ("lsst", "dune", "fermilab", "des"):
-        issuer = exp
-        igroup = exp
-    else:
-        issuer = "fermilab"
-        igroup = f"fermilab/{exp}"
-    vomsfile = os.environ.get("X509_USER_PROXY", f"{tmp}/x509up_{exp}_{role}_{pid}")
+    # pid = os.getuid()
+    # tmp = utils.getTmp()
+    # exp = utils.getExp()
+    # if exp == "samdev":
+    #     issuer = "fermilab"
+    #     igroup = "fermilab"
+    # elif exp in ("lsst", "dune", "fermilab", "des"):
+    #     issuer = exp
+    #     igroup = exp
+    # else:
+    #     issuer = "fermilab"
+    #     igroup = f"fermilab/{exp}"
+    # vomsfile = os.environ.get("X509_USER_PROXY", f"{tmp}/x509up_{exp}_{role}_{pid}")
 
-    # If this is a read-only proxy, like managed proxies or POMS-uploaded proxy, don't touch it!
-    if os.path.exists(vomsfile) and (not os.access(vomsfile, os.W_OK)):
-        return vomsfile
+    # # If this is a read-only proxy, like managed proxies or POMS-uploaded proxy, don't touch it!
+    # if os.path.exists(vomsfile) and (not os.access(vomsfile, os.W_OK)):
+    #     return vomsfile
 
-    certfile = os.environ.get("X509_USER_PROXY", f"{tmp}/x509up_u{pid}")
+    # certfile = os.environ.get("X509_USER_PROXY", f"{tmp}/x509up_u{pid}")
 
-    invalid_proxy = False
-    if not force_proxy:
-        chk_cmd_str = f"voms-proxy-info -exists -valid 0:10 -file {vomsfile}"
-        extra_check_args = generate_proxy_command_verbose_args(chk_cmd_str)
-        try:
-            subprocess.run(shlex.split(chk_cmd_str), check=True, **extra_check_args)
-        except subprocess.CalledProcessError:
-            invalid_proxy = True
+    # invalid_proxy = False
+    # if not force_proxy:
+    #     chk_cmd_str = f"voms-proxy-info -exists -valid 0:10 -file {vomsfile}"
+    #     extra_check_args = generate_proxy_command_verbose_args(chk_cmd_str)
+    #     try:
+    #         subprocess.run(shlex.split(chk_cmd_str), check=True, **extra_check_args)
+    #     except subprocess.CalledProcessError:
+    #         invalid_proxy = True
 
-    if force_proxy or invalid_proxy:
-        cigetcert_cmd_str = f"cigetcert -i 'Fermi National Accelerator Laboratory' -n --proxyhours 168 --minhours 167 -o {certfile}"
-        cigetcert_cmd = subprocess.run(
-            shlex.split(cigetcert_cmd_str),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-            encoding="UTF-8",
-            env=os.environ,
-        )
+    # if force_proxy or invalid_proxy:
+    #     cigetcert_cmd_str = f"cigetcert -i 'Fermi National Accelerator Laboratory' -n --proxyhours 168 --minhours 167 -o {certfile}"
+    #     cigetcert_cmd = subprocess.run(
+    #         shlex.split(cigetcert_cmd_str),
+    #         stdout=subprocess.PIPE,
+    #         stderr=subprocess.STDOUT,
+    #         check=False,
+    #         encoding="UTF-8",
+    #         env=os.environ,
+    #     )
 
-        try:
-            cigetcert_cmd.check_returncode()
-        except subprocess.CalledProcessError:
-            msg = f"Cigetcert failed to get a proxy due to an unspecified issue. Please inspect the output below.\n{cigetcert_cmd.stdout}"
-            if "Kerberos initialization failed" in cigetcert_cmd.stdout:
-                msg = (
-                    "Cigetcert failed to get proxy due to kerberos issue.  Please ensure "
-                    "you have valid kerberos credentials."
-                )
-            raise PermissionError(msg)
+    #     try:
+    #         cigetcert_cmd.check_returncode()
+    #     except subprocess.CalledProcessError:
+    #         msg = f"Cigetcert failed to get a proxy due to an unspecified issue. Please inspect the output below.\n{cigetcert_cmd.stdout}"
+    #         if "Kerberos initialization failed" in cigetcert_cmd.stdout:
+    #             msg = (
+    #                 "Cigetcert failed to get proxy due to kerberos issue.  Please ensure "
+    #                 "you have valid kerberos credentials."
+    #             )
+    #         raise PermissionError(msg)
 
-        voms_proxy_init_cmd_str = (
-            f"voms-proxy-init -dont-verify-ac -valid 167:00 -rfc -noregen"
-            f" -debug -cert {certfile} -key {certfile} -out {vomsfile} -vomslife 167:0"
-            f" -voms {issuer}:/{igroup}/Role={role}"
-        )
-        extra_check_args = generate_proxy_command_verbose_args(voms_proxy_init_cmd_str)
-        try:
-            subprocess.run(
-                shlex.split(voms_proxy_init_cmd_str),
-                check=True,
-                env=os.environ,
-                **extra_check_args,
-            )
-        except subprocess.CalledProcessError:
-            raise PermissionError(f"Failed attempting '{voms_proxy_init_cmd_str}'")
-        else:
-            return vomsfile
+    #     voms_proxy_init_cmd_str = (
+    #         f"voms-proxy-init -dont-verify-ac -valid 167:00 -rfc -noregen"
+    #         f" -debug -cert {certfile} -key {certfile} -out {vomsfile} -vomslife 167:0"
+    #         f" -voms {issuer}:/{igroup}/Role={role}"
+    #     )
+    #     extra_check_args = generate_proxy_command_verbose_args(voms_proxy_init_cmd_str)
+    #     try:
+    #         subprocess.run(
+    #             shlex.split(voms_proxy_init_cmd_str),
+    #             check=True,
+    #             env=os.environ,
+    #             **extra_check_args,
+    #         )
+    #     except subprocess.CalledProcessError:
+    #         raise PermissionError(f"Failed attempting '{voms_proxy_init_cmd_str}'")
+    #     else:
+    #         return vomsfile
 
-    return vomsfile
+    # return vomsfile
 
 
 # pylint: disable=invalid-name
@@ -469,7 +471,7 @@ if __name__ == "__main__":
     )
 
     opts = parser.parse_args()
-    myrole = getRole(opts.role)
+    myrole = creds.getRole(opts.role)
 
     try:
         if opts.command[0] in ("cp", "ls", "mkdir_p", "checkToken"):
