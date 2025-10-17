@@ -398,21 +398,19 @@ def chmod(dest: str, mode: int) -> None:
     # just try with the raw path, and ignore it if it doesn't work
     try:
         os.chmod(dest, mode)
-    except FileNotFoundError:
-        pass
-    except PermissionError:
+    except (FileNotFoundError, PermissionError):
         pass
 
 
 def mkdir_p(dest: str) -> None:
-    """make possibly multiple directories"""
+    """make possibly multiple directories with gfal-mkdir -p"""
     dest = fix_pnfs(dest)
     if 0 != os.system(f"{gfal_clean_env}; gfal-mkdir -p {dest}"):
         raise PermissionError(f"Error: Unable to make directory {dest}")
 
 
 def ls(dest: str) -> List[str]:
-    """make possibly multiple directories"""
+    """list directory contents with gfal-ls"""
     dest = fix_pnfs(dest)
     with os.popen(f"{gfal_clean_env}; gfal-ls {dest} 2>/dev/null") as f:
         files = [x.strip() for x in f.readlines()]

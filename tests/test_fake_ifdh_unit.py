@@ -1,15 +1,8 @@
 from collections import namedtuple
-import grp
 import os
-import pathlib
-import pwd
-import shutil
 import sys
-import tempfile
 
 import pytest
-import jwt
-import scitokens
 
 #
 # we assume everwhere our current directory is in the package
@@ -124,3 +117,76 @@ def test_cp():
     fake_ifdh.cp(__file__, dest)
     assert os.path.exists(dest)
     os.unlink(dest)
+
+
+@pytest.mark.parametrize(
+    "input_path,expected_output",
+    [
+        (
+            "/nashome/user/file.txt",
+            "/nashome/user/file.txt",
+        ),  # NFS mount - return as is
+        (
+            "/pnfs/path/to/file.txt",
+            "https://fndcadoor.fnal.gov:2880/path/to/file.txt",  # PNFS path - make webdav URL
+        ),
+        (
+            "/some/other/path/file.txt",
+            "/some/other/path/file.txt",
+        ),  # Other path - return as is
+    ],
+)
+@pytest.mark.unit
+def test_fix_pnfs(input_path, expected_output):
+    assert fake_ifdh.fix_pnfs(input_path) == expected_output
+
+
+# only works with real files.
+class TestChmod:
+    @pytest.mark.unit
+    def test_chmod_good(self, tmp_path):
+        test_file = tmp_path / "testfile"
+        test_file.write_text("test")
+        fake_ifdh.chmod(str(test_file), 0o742)
+        assert oct(test_file.stat().st_mode & 0o777) == "0o742"
+
+    @pytest.mark.unit
+    def test_chmod_no_file(self, tmp_path):
+        test_file = tmp_path / "nonexistentfile"
+        fake_ifdh.chmod(str(test_file), 0o742)
+
+    @pytest.mark.unit
+    def test_chmod_no_permissions(self, tmp_path):
+        test_file = tmp_path / "testfile"
+        test_file.write_text("test")
+        # Remove all permissions
+        test_file.chmod(0o000)
+        fake_ifdh.chmod(str(test_file), 0o742)  # Should raise no error
+        test_file.chmod(0o644)  # Reset permissions for cleanup
+
+
+class TestMkdirP:
+    @pytest.mark.unit
+    def test_mkdir_p(self, tmp_path):
+        dest = tmp_path / "a/b/c/d/e"
+        fake_ifdh.mkdir_p(str(dest))
+        assert os.path.exists(dest)
+
+    @pytest.mark.unit
+    def test_mkdir_p_bad(self):
+        dest = os.path.join(os.devnull, "forbidden_directory")
+        with pytest.raises(PermissionError, match=f"Unable to make directory {dest}"):
+            fake_ifdh.mkdir_p(dest)  # Should not raise an error even if it fails
+
+
+@pytest.mark.unit
+def test_ls(tmp_path):
+    test_dir = tmp_path / "test_ls_dir"
+    test_dir.mkdir()
+    (test_dir / "file1.txt").touch()
+    (test_dir / "file2.txt").touch()
+    (test_dir / "file3.txt").touch()
+
+    result = fake_ifdh.ls(str(test_dir))
+    expected_files = {"file1.txt", "file2.txt", "file3.txt"}
+    assert set(result) == expected_files
