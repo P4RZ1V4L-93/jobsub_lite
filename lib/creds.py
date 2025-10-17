@@ -14,16 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """credential related routines"""
-import io
 import os
 import pathlib
-import shlex
-import subprocess
-import sys
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List
 
-import fake_ifdh
+from defaults import DEFAULT_ROLE
 import packages
+import cred_proxy
+import cred_token
 from tracing import as_span
 
 
@@ -74,7 +72,8 @@ SUPPORTED_AUTH_METHODS = list(
 @as_span("get_creds")
 def get_creds(args: Dict[str, Any] = {}) -> CredentialSet:
     """get credentials for job operations"""
-    role = fake_ifdh.getRole(args.get("role", None))
+    group = args.get("group", cred_token.getExp())
+    role = getRole(args.get("role", None))
     args["role"] = role
 
     # Set our auth_methods: Precedence:  --auth-methods, JOBSUB_AUTH_METHODS, REQUIRED_AUTH_METHODS
@@ -94,23 +93,20 @@ def get_creds(args: Dict[str, Any] = {}) -> CredentialSet:
         cred_type: None for cred_type in SUPPORTED_AUTH_METHODS
     }
     if "token" in auth_methods:
-        t = fake_ifdh.getToken(role, args.get("verbose", 0))
+        t = cred_token.getToken(group, role, args.get("verbose", 0))
         t = t.strip()
         creds_to_return["token"] = t
     if "proxy" in auth_methods:
         # User must provide proxy in one of two places:
         # 1) X509_USER_PROXY environment variable
         # 2) A proxy file in their default location (usually /tmp/x509up_experiment_role_uid
-        experiment = fake_ifdh.getExp()
-        uid = os.getuid()
-        tmp = fake_ifdh.getTmp()
         proxy_file = pathlib.Path(
             os.environ.get(
                 "X509_USER_PROXY",
-                os.path.join(tmp, f"x509up_{experiment}_{role}_{uid}"),
+                str(cred_proxy.default_proxy_location(experiment=group, role=role)),
             ).strip()
         )
-        check_proxy(proxy_file, args.get("verbose", 0))
+        cred_proxy.check_proxy(proxy_file, args.get("verbose", 0))
         p = str(proxy_file)
         creds_to_return["proxy"] = p
     obtained_creds = CredentialSet(**creds_to_return)
@@ -133,93 +129,41 @@ def resolve_auth_methods(arg_auth_method: Optional[str]) -> List[str]:
     return REQUIRED_AUTH_METHODS
 
 
-def check_proxy(proxy_file: Union[str, pathlib.Path], verbose: int = 0) -> None:
+# pylint: disable=unused-argument
+@as_span("getRole")
+def getRole(role_override: Optional[str] = None, verbose: int = 0) -> str:
+    """get current role.  Will check the following in order:
+    1. role_override
+    2. default role file
+    3. Existing valid token
+    4. Use default
     """
-    Check that the provided proxy file is valid.
-    Args:
+    if role_override:
+        return role_override
 
-        proxy_file (Union[str, pathlib.Path]): Path to the proxy file to be checked.
-        verbose (int, optional): Verbosity level for command output. Defaults to 0.
+    # Once we get to python 3.8, this can be changed to if (_role := getRole_from_default_role_file()): return _role,
+    # and same for getRole_from_valid_token.  IMO, that's a bit clearer than this loop
+    _role: Optional[str] = DEFAULT_ROLE
+    for role_location_try_func in (
+        getRole_from_default_role_file,
+        cred_token.getRole_from_valid_token,
+    ):
+        _role = role_location_try_func()
+        if _role:
+            return _role
 
-    Raises:
-        JobsubInvalidProxyError: If the proxy file does not exist, is not readable,
-        or is not a valid VOMS proxy.
-    """
-    if isinstance(proxy_file, str):
-        _proxy_file = pathlib.Path(proxy_file)
-    else:
-        _proxy_file = proxy_file
-
-    check_proxy_file(_proxy_file)  # Does proxy file exist, and is it readable?
-    check_valid_proxy(_proxy_file, verbose)
+    return DEFAULT_ROLE
 
 
-def check_proxy_file(proxy_file: pathlib.Path) -> None:
-    """
-    Checks whether the specified proxy file exists and is readable.
+def getRole_from_default_role_file() -> Optional[str]:
+    # if we have a default role pushed with a vault token, or $HOME/.jobsub_default... use that
+    uid = os.getuid()
 
-    Args:
-        proxy_file (pathlib.Path): The path to the proxy file to check.
+    for prefix in ["/tmp/", f"{os.environ['HOME']}/.config/"]:
+        fname = f"{prefix}jobsub_default_role_{cred_token.getExp()}_{uid}"
 
-    Raises:
-        JobsubInvalidProxyError: If the proxy file does not exist or is not readable by the current user.
-    """
-    if not proxy_file.exists():
-        raise JobsubInvalidProxyError("The proxy file does not exist.", str(proxy_file))
-    if not os.access(proxy_file, os.R_OK):
-        raise JobsubInvalidProxyError(
-            "The proxy file is not readable by the current user.", str(proxy_file)
-        )
-
-
-def check_valid_proxy(proxy_file: pathlib.Path, verbose: int = 0) -> None:
-    """
-    Checks if the provided proxy file is a valid and non-expired VOMS proxy.
-
-    Args:
-        proxy_file (pathlib.Path): Path to the proxy file to be validated.
-        verbose (int, optional): Verbosity level for command output. Defaults to 0.
-
-    Raises:
-        JobsubInvalidProxyError: If the proxy is not a valid VOMS proxy or has expired.
-    """
-    chk_cmd_str = f"voms-proxy-info -exists -valid 0:10 -file {str(proxy_file)}"
-    extra_check_args = _generate_proxy_command_verbose_args(chk_cmd_str, verbose)
-    try:
-        subprocess.run(shlex.split(chk_cmd_str), check=True, **extra_check_args)
-    except subprocess.CalledProcessError as e:
-        raise JobsubInvalidProxyError(
-            "The proxy is not a valid VOMS proxy or has expired", str(proxy_file)
-        ) from e
-
-
-def _generate_proxy_command_verbose_args(
-    cmd_str: str, verbose: int = 0
-) -> Dict[str, Any]:
-    # Helper function to handle verbose and regular mode
-    if verbose > 0:
-        # Caller that sets up command will write stdout to stderr
-        # Equivalent of >&2
-        sys.stderr.write(f"Running: {cmd_str}\n")
-        if isinstance(sys.stderr, io.StringIO):
-            # being called from jobsub_api...
-            return {}
-        return {"stdout": sys.stderr}
-    # Caller that sets up command will write stdout to /dev/null, stderr to stdout
-    # Equivalent of >/dev/null 2>&1
-    return {
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.STDOUT,
-    }
-
-
-class JobsubInvalidProxyError(Exception):
-    """Exception raised for invalid proxies"""
-
-    def __init__(self, message: str, proxy_path: str) -> None:
-        self.message = message
-        self.proxy_path = proxy_path
-        super().__init__(self.message)
-
-    def __str__(self) -> str:
-        return f"The proxy file at {self.proxy_path} is invalid: {self.message}"
+        if os.path.exists(fname) and os.stat(fname).st_uid == uid:
+            with open(fname, "r") as f:  # pylint: disable=unspecified-encoding
+                role = f.read().strip()
+            return role
+    return None

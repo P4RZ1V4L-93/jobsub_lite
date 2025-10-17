@@ -1,4 +1,5 @@
 import os
+import pathlib
 import shutil
 import sys
 import pytest
@@ -19,19 +20,10 @@ if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
 else:
     sys.path.append("../lib")
 import creds
-from fake_ifdh import DEFAULT_ROLE
+import cred_proxy
+import cred_token
+from defaults import DEFAULT_ROLE
 from test_unit import TestUnit
-
-
-@pytest.fixture
-def fake_proxy(tmp_path, clear_x509_user_proxy):
-    def inner(create_file=True, mode=0o400):
-        _fake_proxy = tmp_path / "fake_proxy"
-        if create_file:
-            _fake_proxy.touch(mode=mode)
-        return _fake_proxy
-
-    return inner
 
 
 @pytest.fixture
@@ -42,26 +34,16 @@ def fake_token(tmp_path, clear_bearer_token_file):
 
 
 @pytest.fixture
-def voms_proxy_info_exit_code(tmp_path, monkeypatch):
-    def inner(exit_code):
-        old_path = os.environ.get("PATH", "")
-        fake_exe_path = tmp_path
-        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
-        script = f"""#!/bin/bash
-        exit {exit_code}
-        """
-        vpi = tmp_path / "voms-proxy-info"
-        vpi.write_text(script)
-        vpi.chmod(0o755)
-
-    return inner
-
-
-@pytest.fixture
-def set_tmp(monkeypatch, tmp_path):
-    tmp = tmp_path
-    monkeypatch.setenv("TMPDIR", str(tmp_path))
-    return tmp
+def htgettoken_mock_good(tmp_path, monkeypatch):
+    old_path = os.environ.get("PATH", "")
+    fake_exe_path = tmp_path
+    monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
+    script = f"""#!/bin/bash
+    exit 0
+    """
+    htgettoken = tmp_path / "htgettoken"
+    htgettoken.write_text(script)
+    htgettoken.chmod(0o755)
 
 
 @pytest.fixture
@@ -75,6 +57,94 @@ def proxy_test_hypot_pro_args(monkeypatch):
     return {"auth_methods": "proxy", "group": "hypot", "role": "Production"}
 
 
+# getRole and derived function test fixtures
+default_role_file_dirs = ("/tmp", f'{os.environ.get("HOME")}/.config')
+
+
+@pytest.fixture
+def stage_existing_default_role_files(set_group_fermilab):
+    # If we already have a default role file, stage it somewhere else
+    staged_temp_files = {}
+
+    uid = os.getuid()
+    group = os.environ.get("GROUP")
+    filename = f"jobsub_default_role_{group}_{uid}"
+    try:
+        for file_location in default_role_file_dirs:
+            file_dir = pathlib.Path(file_location)
+            filepath = file_dir / filename
+
+            if os.path.exists(filepath):
+                old_file_temp = tempfile.NamedTemporaryFile(delete=False)
+                os.rename(filepath, old_file_temp.name)
+                staged_temp_files[filepath] = old_file_temp.name
+
+        yield
+
+    finally:
+        # Put any staged files back
+        for filepath, staged_file in staged_temp_files.items():
+            os.rename(staged_file, filepath)
+
+
+@pytest.fixture(params=default_role_file_dirs)
+def default_role_file_location(request):
+    return request.param
+
+
+class TestGetRole:
+    @pytest.mark.unit
+    def test_getRole_from_default_role_file(
+        self, default_role_file_location, stage_existing_default_role_files
+    ):
+        uid = os.getuid()
+        group = os.environ.get("GROUP")
+        filename = f"jobsub_default_role_{group}_{uid}"
+        file_dir = pathlib.Path(default_role_file_location)
+        file_dir.mkdir(exist_ok=True)
+        filepath = file_dir / filename
+        try:
+            filepath.write_text("testrole")
+            assert creds.getRole_from_default_role_file() == "testrole"
+        finally:
+            os.unlink(filepath)
+
+    @pytest.mark.unit
+    def test_getRole_from_default_role_file_none(
+        self, stage_existing_default_role_files
+    ):
+        assert not creds.getRole_from_default_role_file()
+
+    @pytest.mark.unit
+    def test_getRole_from_valid_token(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
+        )
+        assert cred_token.getRole_from_valid_token() == "Production"
+
+    @pytest.mark.unit
+    def test_getRole_from_valid_token_invalid(self, monkeypatch):
+        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/malformed.token")
+        with pytest.raises(TypeError, match="malformed.*list"):
+            cred_token.getRole_from_valid_token()
+
+    @pytest.mark.unit
+    def test_getRole_from_valid_token_none(self, monkeypatch):
+        monkeypatch.delenv("BEARER_TOKEN_FILE", raising=False)
+        assert not cred_token.getRole_from_valid_token()
+
+    @pytest.mark.unit
+    def test_getRole(self, set_group_fermilab):
+        res = creds.getRole()
+        assert res == DEFAULT_ROLE
+
+    @pytest.mark.unit
+    def test_getRole_override(self):
+        override_role = "Hamburgler"
+        res = creds.getRole(override_role)
+        assert res == override_role
+
+
 class TestCredUnit:
     """
     Use with pytest... unit tests for ../lib/*.py
@@ -84,13 +154,23 @@ class TestCredUnit:
 
     @pytest.mark.unit
     def test_get_creds_file_exists(
-        self, fake_token, clear_x509_user_proxy, clear_bearer_token_file, monkeypatch
+        self,
+        htgettoken_mock_good,
+        fake_token,
+        clear_x509_user_proxy,
+        clear_bearer_token_file,
+        monkeypatch,
     ):
         """get credentials, make sure the credentials file returned
         exist. Default is to get REQUIRED_AUTH_METHODS which is 'token'"""
         os.environ["BEARER_TOKEN_FILE"] = os.path.join(
             os.path.dirname(__file__), "fake_ifdh_tokens", "fermilab.token"
         )
+        import importlib
+
+        monkeypatch.setattr("cred_token.checkToken", lambda a, b: True)
+        importlib.reload(cred_token)
+
         os.environ["GROUP"] = TestUnit.test_group
         cred_set = creds.get_creds()
         assert os.path.exists(os.environ["BEARER_TOKEN_FILE"])
@@ -171,49 +251,6 @@ class TestCredUnit:
         )
         del os.environ["X509_USER_PROXY"]
 
-    @pytest.mark.unit
-    def test_proxy_doesnt_exist(self, fake_proxy):
-        """Check that a non-existent proxy raises the correct Exception"""
-        _fake_proxy = fake_proxy(create_file=False)
-        with pytest.raises(
-            creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {_fake_proxy} is invalid: The proxy file does not exist.",
-        ):
-            creds.check_proxy(_fake_proxy)
-        with pytest.raises(
-            creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {_fake_proxy} is invalid: The proxy file does not exist.",
-        ):
-            creds.check_proxy(str(_fake_proxy))
-
-    @pytest.mark.unit
-    def test_proxy_exists_not_readable(self, fake_proxy):
-        _fake_proxy = fake_proxy(mode=0o000)
-        with pytest.raises(
-            creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {_fake_proxy} is invalid: The proxy file is not readable by the current user.",
-        ):
-            creds.check_proxy(_fake_proxy)
-
-    @pytest.mark.unit
-    def test_proxy_exists_invalid(self, voms_proxy_info_exit_code, fake_proxy):
-        # Create fake voms proxy command that always returns 1 for tests
-        voms_proxy_info_exit_code(1)
-        _fake_proxy = fake_proxy()
-
-        with pytest.raises(
-            creds.JobsubInvalidProxyError,
-            match=f"The proxy file at {_fake_proxy} is invalid: The proxy is not a valid VOMS proxy or has expired",
-        ):
-            creds.check_proxy(_fake_proxy)
-
-    @pytest.mark.unit
-    def test_proxy_good(self, voms_proxy_info_exit_code, fake_proxy):
-        # Create fake voms proxy command that always returns 0 for tests
-        voms_proxy_info_exit_code(0)
-        _fake_proxy = fake_proxy()
-        creds.check_proxy(_fake_proxy)
-
     # Integration tests:
 
     # TODO Add pytest-dotenv extension to make these instructions IDE-independent
@@ -259,7 +296,7 @@ class TestCredUnit:
         monkeypatch.setenv("X509_USER_PROXY", str(_fake_proxy))
 
         with pytest.raises(
-            creds.JobsubInvalidProxyError, match="not a valid VOMS proxy"
+            cred_proxy.JobsubInvalidProxyError, match="not a valid VOMS proxy"
         ):
             creds.get_creds(proxy_test_hypot_pro_args)
 
@@ -273,7 +310,7 @@ class TestCredUnit:
     ):
         monkeypatch.setenv("X509_USER_PROXY", str(fake_proxy(create_file=False)))
 
-        with pytest.raises(creds.JobsubInvalidProxyError, match="does not exist"):
+        with pytest.raises(cred_proxy.JobsubInvalidProxyError, match="does not exist"):
             creds.get_creds(proxy_test_hypot_pro_args)
 
     @pytest.mark.integration
@@ -314,7 +351,7 @@ class TestCredUnit:
         fake_proxy.touch(0o400)
 
         with pytest.raises(
-            creds.JobsubInvalidProxyError, match="not a valid VOMS proxy"
+            cred_proxy.JobsubInvalidProxyError, match="not a valid VOMS proxy"
         ):
             creds.get_creds(args)
 
@@ -326,7 +363,7 @@ class TestCredUnit:
         clear_x509_user_proxy,
         set_required_method_proxy_only,
     ):
-        with pytest.raises(creds.JobsubInvalidProxyError, match="does not exist"):
+        with pytest.raises(cred_proxy.JobsubInvalidProxyError, match="does not exist"):
             creds.get_creds(proxy_test_hypot_pro_args)
 
 
@@ -351,3 +388,56 @@ def test_resolve_auth_methods(cmdline_arg, env_var, expected, monkeypatch):
         monkeypatch.setenv("JOBSUB_AUTH_METHODS", env_var)
     methods = creds.resolve_auth_methods(cmdline_arg)
     assert methods == expected
+
+
+class TestGetRole:
+    @pytest.mark.unit
+    def test_getRole_from_default_role_file(
+        self, default_role_file_location, stage_existing_default_role_files
+    ):
+        uid = os.getuid()
+        group = os.environ.get("GROUP")
+        filename = f"jobsub_default_role_{group}_{uid}"
+        file_dir = pathlib.Path(default_role_file_location)
+        file_dir.mkdir(exist_ok=True)
+        filepath = file_dir / filename
+        try:
+            filepath.write_text("testrole")
+            assert creds.getRole_from_default_role_file() == "testrole"
+        finally:
+            os.unlink(filepath)
+
+    @pytest.mark.unit
+    def test_getRole_from_default_role_file_none(
+        self, stage_existing_default_role_files
+    ):
+        assert not creds.getRole_from_default_role_file()
+
+    @pytest.mark.unit
+    def test_getRole_from_valid_token(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
+        )
+        assert cred_token.getRole_from_valid_token() == "Production"
+
+    @pytest.mark.unit
+    def test_getRole_from_valid_token_invalid(self, monkeypatch):
+        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/malformed.token")
+        with pytest.raises(TypeError, match="malformed.*list"):
+            cred_token.getRole_from_valid_token()
+
+    @pytest.mark.unit
+    def test_getRole_from_valid_token_none(self, monkeypatch):
+        monkeypatch.delenv("BEARER_TOKEN_FILE", raising=False)
+        assert not cred_token.getRole_from_valid_token()
+
+    @pytest.mark.unit
+    def test_getRole(self, set_group_fermilab):
+        res = creds.getRole()
+        assert res == DEFAULT_ROLE
+
+    @pytest.mark.unit
+    def test_getRole_override(self):
+        override_role = "Hamburgler"
+        res = creds.getRole(override_role)
+        assert res == override_role

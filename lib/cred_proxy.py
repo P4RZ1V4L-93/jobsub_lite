@@ -23,13 +23,13 @@ import pathlib
 import shlex
 import subprocess
 import sys
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 # TODO: Do we need this anymore since we're IN lib?  # pylint: disable=fixme
 PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PREFIX, "lib"))
 
-from defaults import DEFAULT_ROLE
+from defaults import DEFAULT_ROLE  # pylint: disable=wrong-import-position
 
 
 # TODO Eventually, the next two funcs should move into utils.py, and be imported from there. But first, utils.py needs to be cleaned up
@@ -130,7 +130,7 @@ def check_valid_proxy(proxy_file: pathlib.Path, verbose: int = 0) -> None:
 
 
 def default_proxy_location(
-    experiment: str = None, role: str = DEFAULT_ROLE
+    experiment: Optional[str] = None, role: str = DEFAULT_ROLE
 ) -> pathlib.Path:
     """Return the default proxy location based on group and role"""
     experiment = getExp() if experiment is None else experiment

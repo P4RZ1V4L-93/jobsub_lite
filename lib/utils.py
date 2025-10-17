@@ -728,6 +728,11 @@ def check_site_and_blocklist(site: str, blocklist: str) -> None:
     return None
 
 
+def getTmp() -> str:
+    """return temp directory path"""
+    return os.environ.get("TMPDIR", "/tmp")
+
+
 class SiteAndUsageModelConflictError(Exception):
     # Exception to raise if a site/usage model are in conflict
     def __init__(self, site: str, usage_model: str):

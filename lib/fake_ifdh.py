@@ -21,24 +21,20 @@
 
 import argparse
 import os
-import io
 import re
-import shlex
-import subprocess
 import sys
-from typing import List, Dict, Any
+from typing import List
 
 
 # TODO: Do we need this anymore since we're IN lib?  # pylint: disable=fixme
 PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PREFIX, "lib"))
 
-import creds
-from defaults import DEFAULT_ROLE
-import cred_proxy
-import cred_token
+
+import creds  # pylint: disable=wrong-import-position
+import cred_token  # pylint: disable=wrong-import-position
+from defaults import DEFAULT_ROLE  # pylint: disable=wrong-import-position
 from tracing import as_span  # pylint: disable=wrong-import-position
-import utils
 
 # def init_scitokens() -> None:
 #     """
@@ -440,7 +436,7 @@ if __name__ == "__main__":
         "cp": cp,
         "ls": ls,
         "mkdir_p": mkdir_p,
-        "getRole": getRole,
+        "getRole": creds.getRole,
     }
     parser = argparse.ArgumentParser(description="ifdh subset replacement")
     parser.add_argument(
