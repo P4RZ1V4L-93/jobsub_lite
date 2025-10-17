@@ -136,3 +136,40 @@ def set_group_fermilab(monkeypatch):
 @pytest.fixture
 def fakefs(fs):
     yield fs
+
+
+# Credentials fixtures common across multiple modules
+
+
+@pytest.fixture
+def fake_proxy(tmp_path, clear_x509_user_proxy):
+    def inner(create_file=True, mode=0o400):
+        _fake_proxy = tmp_path / "fake_proxy"
+        if create_file:
+            _fake_proxy.touch(mode=mode)
+        return _fake_proxy
+
+    return inner
+
+
+@pytest.fixture
+def voms_proxy_info_exit_code(tmp_path, monkeypatch):
+    def inner(exit_code):
+        old_path = os.environ.get("PATH", "")
+        fake_exe_path = tmp_path
+        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
+        script = f"""#!/bin/bash
+        exit {exit_code}
+        """
+        vpi = tmp_path / "voms-proxy-info"
+        vpi.write_text(script)
+        vpi.chmod(0o755)
+
+    return inner
+
+
+@pytest.fixture
+def set_tmp(monkeypatch, tmp_path):
+    tmp = tmp_path
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    return tmp
