@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 
@@ -49,16 +50,26 @@ def set_temp_x509_user_proxy(monkeypatch, set_creds_dir):
 
 
 @pytest.fixture
-def needs_x509_user_proxy(
+def needs_test_managed_proxy(
     monkeypatch,
     set_temp_x509_user_proxy,
     check_user_kerberos_creds,
 ):
     """
-    Fixture to ensure that the X509_USER_PROXY is set and valid.
+    Fixture to ensure that the X509_USER_PROXY is set to the test managed proxy. This proxy must reside
+    at the location specified by INT_X509_USER_PROXY env variable.
     """
-    monkeypatch.setenv("GROUP", TestUnit.test_group)
-    yield creds.get_creds({"role": "Analysis", "auth_methods": "proxy"})
+    try:
+        test_managed_proxy = os.environ["INT_X509_USER_PROXY"]
+    except KeyError:
+        pytest.fail("INT_X509_USER_PROXY environment variable is not set.")
+
+    try:
+        shutil.copy(test_managed_proxy, os.environ["X509_USER_PROXY"])
+    except Exception as e:
+        pytest.fail(f"Failed to copy test managed proxy into place: {e}")
+
+    yield os.environ["X509_USER_PROXY"]
 
 
 @pytest.fixture
@@ -75,17 +86,25 @@ def needs_token(
 
 
 @pytest.fixture
+def needs_token_file(needs_token):
+    """
+    Fixture to ensure that the BEARER_TOKEN_FILE is set and valid. Yields the token file rather
+    than the full CredentialSet
+    """
+    yield needs_token.token
+
+
+@pytest.fixture
 def needs_credentials(
     monkeypatch,
-    needs_token,
-    needs_x509_user_proxy,
+    needs_token_file,
+    needs_test_managed_proxy,
     check_user_kerberos_creds,
 ):
     monkeypatch.setenv("GROUP", TestUnit.test_group)
-    yield creds.get_creds({"role": "Analysis"})
-    cred_set_token = needs_token
-    cred_set_proxy = needs_x509_user_proxy
-    yield creds.CredentialSet(token=cred_set_token.token, proxy=cred_set_proxy.proxy)
+    cred_set_token = needs_token_file
+    cred_set_proxy = needs_test_managed_proxy
+    yield creds.CredentialSet(token=cred_set_token, proxy=cred_set_proxy)
 
 
 @pytest.fixture
