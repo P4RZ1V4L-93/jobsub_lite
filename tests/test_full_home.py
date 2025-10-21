@@ -24,8 +24,6 @@ if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
 else:
     sys.path.append("../lib")
 
-import fake_ifdh
-
 if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
     os.environ["PATH"] = "/opt/jobsub_lite/bin:" + os.environ["PATH"]
 else:
@@ -36,7 +34,10 @@ else:
     )
 
 if 0 != os.system("ksu -e /bin/true"):
-    pytest.skip("cannot ksu to make test filesystem here", allow_module_level=True)
+    pytest.skip(
+        "cannot ksu to make test filesystem here. You may need a kerberos ticket",
+        allow_module_level=True,
+    )
 
 
 @pytest.fixture
@@ -51,7 +52,10 @@ def tiny_home():
     os.system(f"ksu -e /bin/mkdir -p {tinymount}")
     os.system(f"ksu -e /bin/mount -o loop,nodev {tinyfile} {tinymount}")
     os.system(f"ksu -e /bin/chown $USER {tinymount}")
-    os.system(f"cp -r $HOME/.config/htgettoken {tinymount}/.config")
+    os.system(f"mkdir -p {tinymount}/.config/htgettoken/")
+    os.system(
+        f"cp -r $HOME/.config/htgettoken/credkey-fermilab-default {tinymount}/.config/htgettoken/"
+    )
     save_home = os.environ["HOME"]
     os.environ["HOME"] = tinymount
     os.system(f"dd if=/dev/zero of={tinymount}/f3k bs=1k count=3")
@@ -65,62 +69,115 @@ def tiny_home():
     return ""
 
 
-def check_for(cmd, string):
-    with os.popen(f"{cmd} 2>&1", "r") as fout:
-        out = fout.read()
-        sys.stdout.write(out)
-        assert string in out
+@pytest.fixture
+def mock_tarfile_publisher_handler(monkeypatch):
+    # Mock TarfilePublisherHandler to avoid actual publishing during tests
+    if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
+        sys.path.append("/opt/jobsub_lite/lib")
+    else:
+        sys.path.append("../lib")
+    import tarfiles
+    import importlib
+
+    monkeypatch.setattr(
+        "tarfiles.TarfilePublisherHandler.cid_exists", lambda x: "PRESENT:12345"
+    )
+    importlib.reload(tarfiles)
+
+
+@pytest.mark.parametrize(
+    "submit_args,expected_error_msg",
+    [
+        ({"executable": "/bin/true", "group": "fermilab"}, "No space left on device"),
+        (
+            {
+                "executable": "/bin/true",
+                "group": "fermilab",
+                "tar_file_name": [f"{os.path.dirname(__file__)}/data/tiny.tar"],
+            },
+            "No space left on device",
+        ),
+        (
+            {
+                "executable": "/bin/true",
+                "group": "fermilab",
+                "tar_file_name": [f"tardir://{os.path.dirname(__file__)}/dagnabbit"],
+            },
+            "Tarring up the directory",
+        ),
+    ],
+)
+@pytest.mark.integration
+def test_full_disk(
+    tiny_home, mock_tarfile_publisher_handler, submit_args, expected_error_msg
+):
+    import jobsub_api
+
+    print("With disk totally full:")
+    os.chdir(os.environ.get("HOME"))
+    os.system(f"df -h $HOME")
+    with pytest.raises(
+        jobsub_api.JobsubAPIError, match="Exception in jobsub_call"
+    ) as excinfo:
+        jobsub_api.submit(**submit_args)
+        assert expected_error_msg in excinfo.__cause__
+
+
+@pytest.mark.parametrize(
+    "submit_args,expected_error_msg",
+    [
+        ({"executable": "/bin/true", "group": "fermilab"}, "No space left on device"),
+        (
+            {
+                "executable": "/bin/true",
+                "group": "fermilab",
+                "tar_file_name": [f"{os.path.dirname(__file__)}/data/tiny.tar"],
+            },
+            "No space left on device",
+        ),
+        (
+            {
+                "executable": "/bin/true",
+                "group": "fermilab",
+                "tar_file_name": [f"tardir://{os.path.dirname(__file__)}/dagnabbit"],
+            },
+            "Tarring up the directory",
+        ),
+    ],
+)
+@pytest.mark.integration
+def test_3k_free(
+    tiny_home, mock_tarfile_publisher_handler, submit_args, expected_error_msg
+):
+    import jobsub_api
+
+    os.system(f"rm $HOME/f3k")
+    os.chdir(os.environ.get("HOME"))
+    print("With 3k free:")
+    os.system(f"df -h $HOME")
+    with pytest.raises(
+        jobsub_api.JobsubAPIError, match="Exception in jobsub_call"
+    ) as excinfo:
+        jobsub_api.submit(**submit_args)
+        assert expected_error_msg in excinfo.__cause__
 
 
 @pytest.mark.integration
-def test_1(tiny_home):
-    # TODO:  These should be split out into a series of tests in the future.
-    # When tarfiles.tar_up transitions from using os.system to subprocess.run/call,
-    # We need to change the expected text for the --tar_file_name tardir:// test cases
-    # to "No space left on device"
-    os.system(f"ls -la $HOME")
-    os.system(f"df -h $HOME")
-    print("With disk totally full:")
+def test_19k_free(tiny_home, mock_tarfile_publisher_handler):
+    import jobsub_api
+
+    os.system(f"rm $HOME/f3k $HOME/f16k")
     print("===================")
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab file:///bin/true",
-        "No space left on device",
-    )
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab --tar_file_name {os.path.dirname(__file__)}/data/tiny.tar file:///bin/true",
-        "No space left on device",
-    )
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab --tar_file_name tardir://{os.path.dirname(__file__)}/dagnabbit file:///bin/true",
-        # "No space left on device",
-        "Tarring up the directory",
-    )
-    os.system(f"rm $HOME/f3k")
-    print("===================")
-    print("With 3k free:")
-    print("===================")
-    os.system(f"df -h $HOME")
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab file:///bin/true",
-        "No space left on device",
-    )
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab --tar_file_name {os.path.dirname(__file__)}/data/tiny.tar file:///bin/true",
-        "No space left on device",
-    )
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab --tar_file_name tardir://{os.path.dirname(__file__)}/dagnabbit file:///bin/true",
-        # "No space left on device",
-        "Tarring up the directory",
-    )
-    os.system(f"rm $HOME/f16k")
-    print("===================")
-    print("With 18k free:")
+    print("With 19k free:")
     print("===================")
     os.system(f"df -h $HOME")
     # Note:  Here, the tarball creation will work, but there won't be space to copy in the submit files
-    check_for(
-        f"cd $HOME; jobsub_submit -G fermilab --tar_file_name tardir://{os.path.dirname(__file__)}/dagnabbit file:///bin/true",
-        "No space left on device",
-    )
-    print("===================")
+    with pytest.raises(
+        jobsub_api.JobsubAPIError, match="Exception in jobsub_call"
+    ) as excinfo:
+        jobsub_api.submit(
+            executable="/bin/true",
+            group="fermilab",
+            tar_file_name=[f"tardir://{os.path.dirname(__file__)}/dagnabbit"],
+        )
+        assert "No space left on device" in excinfo.__cause__
