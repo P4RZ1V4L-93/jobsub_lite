@@ -25,6 +25,7 @@ else:
     sys.path.append("../lib")
 
 import fake_ifdh
+import cred_token
 
 if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
     os.environ["PATH"] = "/opt/jobsub_lite/bin:" + os.environ["PATH"]
@@ -39,9 +40,9 @@ else:
 @pytest.fixture
 def add_links():
     # add symlink and hardlink in dagnabbit directory for tarfile tests
-    f = "dagnabbit/jobA.sh"
-    slf = "dagnabbit/test_symlink"
-    hlf = "dagnabbit/test_hardlink"
+    f = f"{os.path.dirname(__file__)}/dagnabbit/jobA.sh"
+    slf = f"{os.path.dirname(__file__)}/dagnabbit/test_symlink"
+    hlf = f"{os.path.dirname(__file__)}/dagnabbit/test_hardlink"
     if not os.path.exists(slf):
         os.symlink("jobA.sh", slf)
     if not os.path.exists(hlf):
@@ -101,6 +102,33 @@ def dune(job_envs):
     os.environ["EXPERIMENT"] = "dune"
     os.environ["SAM_EXPERIMENT"] = "dune"
     os.environ["SAM_STATION"] = "dune"
+
+
+@pytest.fixture
+def samdev_token():
+    old_btf = os.environ.pop("BEARER_TOKEN_FILE", None)
+    yield cred_token.getToken(group="fermilab", role="Analysis")
+    os.environ.pop("BEARER_TOKEN_FILE", None)
+    if old_btf:
+        os.environ["BEARER_TOKEN_FILE"] = old_btf
+
+
+@pytest.fixture
+def dune_token():
+    old_btf = os.environ.pop("BEARER_TOKEN_FILE", None)
+    yield cred_token.getToken(group="dune", role="Analysis")
+    os.environ.pop("BEARER_TOKEN_FILE", None)
+    if old_btf:
+        os.environ["BEARER_TOKEN_FILE"] = old_btf
+
+
+@pytest.fixture
+def nova_token():
+    old_btf = os.environ.pop("BEARER_TOKEN_FILE", None)
+    yield cred_token.getToken(group="nova", role="Analysis")
+    os.environ.pop("BEARER_TOKEN_FILE", None)
+    if old_btf:
+        os.environ["BEARER_TOKEN_FILE"] = old_btf
 
 
 @pytest.fixture
@@ -223,11 +251,12 @@ class dircontext:
         os.chdir(self.returnto)
 
 
+# TODO This should use the test managed proxy
 def condor_dag_launch(dagfile, extra=""):
     """launch a dag from our dag test area"""
 
     # need some environment variables to fill in the submit files...
-    proxy = fake_ifdh.getProxy("Analysis")
+    proxy = cred_token.getToken(group="fermilab", role="Analysis")
     with os.popen(f"openssl x509 -subject -noout -in {proxy}") as subjin:
         line = subjin.readline()
         line = line.strip().replace("subject= ", "")
@@ -276,7 +305,7 @@ def test_no_submit_condor_submit(samdev):
 
 
 @pytest.mark.integration
-def test_launch_lookaround_ddir(samdev):
+def test_launch_lookaround_ddir(samdev_token, samdev):
     pid = os.getpid()
     ddir = f"/pnfs/fermilab/users/$USER/d{pid}"
     fake_ifdh.mkdir_p(ddir)
@@ -285,37 +314,37 @@ def test_launch_lookaround_ddir(samdev):
 
 
 @pytest.mark.integration
-def test_launch_lookaround_dune(dune):
+def test_launch_lookaround_dune(dune_token, dune):
     lookaround_launch("--devserver")
 
 
 @pytest.mark.integration
-def test_launch_lookaround_dune_gp_poolflag(dune):
+def test_launch_lookaround_dune_gp_poolflag(dune_token, dune):
     lookaround_launch("--global-pool=dune")
 
 
 @pytest.mark.integration
-def test_launch_lookaround_dune_gp(dune_gp):
+def test_launch_lookaround_dune_gp(dune_token, dune_gp):
     lookaround_launch("")
 
 
 @pytest.mark.integration
-def test_maxconcurrent(samdev):
+def test_maxconcurrent(samdev_token, samdev):
     lookaround_launch("--maxConcurrent 2 -N 6 ")
 
 
 @pytest.mark.integration
-def test_dd_args(samdev):
+def test_dd_args(samdev_token, samdev):
     fife_launch(" --dd-percentage 50 " " --dd-extra-dataset mwm_out_1 ")
 
 
 @pytest.mark.integration
-def test_maxconcurrent_dataset(samdev):
+def test_maxconcurrent_dataset(samdev_token, samdev):
     fife_launch("--maxConcurrent 2")
 
 
 @pytest.mark.integration
-def test_dash_f_plain(dune_test_file):
+def test_dash_f_plain(dune_token, dune_test_file):
     lookaround_launch(
         f"-f {dune_test_file}",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(dune_test_file)}",
@@ -323,7 +352,7 @@ def test_dash_f_plain(dune_test_file):
 
 
 @pytest.mark.integration
-def test_dash_f_sl6(dune_test_file):
+def test_dash_f_sl6(dune_token, dune_test_file):
     lookaround_launch(
         f"-f {dune_test_file} "
         "--singularity=/cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-sl6:latest",
@@ -332,7 +361,7 @@ def test_dash_f_sl6(dune_test_file):
 
 
 @pytest.mark.integration
-def test_dash_f_dropbox_cvmfs(dune):
+def test_dash_f_dropbox_cvmfs(dune_token, dune):
     lookaround_launch(
         f"-f dropbox://{__file__} --use-cvmfs-dropbox",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(__file__)}",
@@ -340,7 +369,7 @@ def test_dash_f_dropbox_cvmfs(dune):
 
 
 @pytest.mark.integration
-def test_tar_dir_cvmfs(dune, add_links):
+def test_tar_dir_cvmfs(dune_token, dune, add_links):
     lookaround_launch(
         f"--tar_file_name tardir://{os.path.dirname(__file__)}/dagnabbit --use-cvmfs-dropbox",
         f"\\$INPUT_TAR_DIR_LOCAL/ckjobA.sh",
@@ -348,7 +377,7 @@ def test_tar_dir_cvmfs(dune, add_links):
 
 
 @pytest.mark.integration
-def test_tar_dir_pnfs(dune, add_links):
+def test_tar_dir_pnfs(dune_token, dune, add_links):
     lookaround_launch(
         f"--tar_file_name tardir://{os.path.dirname(__file__)}/dagnabbit --use-pnfs-dropbox",
         f"\\$INPUT_TAR_DIR_LOCAL/ckjobA.sh",
@@ -356,7 +385,7 @@ def test_tar_dir_pnfs(dune, add_links):
 
 
 @pytest.mark.integration
-def test_dash_f_dropbox_pnfs(dune):
+def test_dash_f_dropbox_pnfs(dune_token, dune):
     lookaround_launch(
         f"-f dropbox://{__file__} --use-pnfs-dropbox",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(__file__)}",
@@ -364,7 +393,7 @@ def test_dash_f_dropbox_pnfs(dune):
 
 
 @pytest.mark.integration
-def test_dash_f_dropbox_pnfs_exra_slashes(dune):
+def test_dash_f_dropbox_pnfs_exra_slashes(dune_token, dune):
     lookaround_launch(
         f"-f dropbox:////{__file__} --use-pnfs-dropbox",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(__file__)}",
@@ -469,22 +498,22 @@ def fife_launch(extra):
 
 
 @pytest.mark.integration
-def test_samdev_fife_launch(samdev):
+def test_samdev_fife_launch(samdev_token, samdev):
     fife_launch("--devserver")
 
 
 @pytest.mark.integration
-def test_dune_fife_launch(dune):
+def test_dune_fife_launch(dune_token, dune):
     fife_launch("--devserver")
 
 
 @pytest.mark.integration
-def test_nova_fife_launch(nova):
+def test_nova_fife_launch(nova_token, nova):
     fife_launch("--devserver")
 
 
 @pytest.mark.integration
-def test_dune_gp_fife_launch(dune_gp):
+def test_dune_gp_fife_launch(dune_token, dune_gp):
     fife_launch("")
 
 

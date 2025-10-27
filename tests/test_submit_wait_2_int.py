@@ -24,6 +24,7 @@ if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
 else:
     sys.path.append("../lib")
 
+import cred_token
 import fake_ifdh
 
 if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
@@ -100,6 +101,39 @@ def dune(job_envs):
     os.environ["EXPERIMENT"] = "dune"
     os.environ["SAM_EXPERIMENT"] = "dune"
     os.environ["SAM_STATION"] = "dune"
+
+
+@pytest.fixture
+def samdev_token():
+    old_btf = os.environ.get("BEARER_TOKEN_FILE", None)
+    yield cred_token.getToken(group="fermilab", role="Analysis")
+    if old_btf is not None:
+        os.environ["BEARER_TOKEN_FILE"] = old_btf
+    else:
+        if os.environ.get("BEARER_TOKEN_FILE", None):
+            del os.environ["BEARER_TOKEN_FILE"]
+
+
+@pytest.fixture
+def dune_token():
+    old_btf = os.environ.get("BEARER_TOKEN_FILE", None)
+    yield cred_token.getToken(group="dune", role="Analysis")
+    if old_btf is not None:
+        os.environ["BEARER_TOKEN_FILE"] = old_btf
+    else:
+        if os.environ.get("BEARER_TOKEN_FILE", None):
+            del os.environ["BEARER_TOKEN_FILE"]
+
+
+@pytest.fixture
+def nova_token():
+    old_btf = os.environ.get("BEARER_TOKEN_FILE", None)
+    yield cred_token.getToken(group="nova", role="Analysis")
+    if old_btf is not None:
+        os.environ["BEARER_TOKEN_FILE"] = old_btf
+    else:
+        if os.environ.get("BEARER_TOKEN_FILE", None):
+            del os.environ["BEARER_TOKEN_FILE"]
 
 
 @pytest.fixture
@@ -224,11 +258,13 @@ class dircontext:
         os.chdir(self.returnto)
 
 
+# TODO This should use the test managed proxy
 def condor_dag_launch(dagfile, extra=""):
     """launch a dag from our dag test area"""
 
     # need some environment variables to fill in the submit files...
-    proxy = fake_ifdh.getProxy("Analysis")
+    # proxy = fake_ifdh.getProxy("Analysis")
+    proxy = fake_ifdh.getToken(group="fermilab", role="Analysis")
     with os.popen(f"openssl x509 -subject -noout -in {proxy}") as subjin:
         line = subjin.readline()
         line = line.strip().replace("subject= ", "")
@@ -282,7 +318,7 @@ def test_2_maxconcurrent_dataset(samdev):
 
 
 @pytest.mark.integration
-def test_2_dash_f_plain(dune_test_file):
+def test_2_dash_f_plain(dune_token, dune_test_file):
     lookaround_launch(
         f"-f {dune_test_file}",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(dune_test_file)}",
@@ -290,7 +326,7 @@ def test_2_dash_f_plain(dune_test_file):
 
 
 @pytest.mark.integration
-def test_2_dash_f_sl6(dune_test_file):
+def test_2_dash_f_sl6(dune_token, dune_test_file):
     lookaround_launch(
         f"-f {dune_test_file} "
         "--singularity=/cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-sl6:latest",
@@ -299,7 +335,7 @@ def test_2_dash_f_sl6(dune_test_file):
 
 
 @pytest.mark.integration
-def test_2_dash_f_dropbox_cvmfs(dune):
+def test_2_dash_f_dropbox_cvmfs(dune_token, dune):
     lookaround_launch(
         f"-f dropbox://{__file__} --use-cvmfs-dropbox",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(__file__)}",
@@ -307,7 +343,7 @@ def test_2_dash_f_dropbox_cvmfs(dune):
 
 
 @pytest.mark.integration
-def test_2_tar_dir_cvmfs(dune, add_links):
+def test_2_tar_dir_cvmfs(dune_token, dune, add_links):
     lookaround_launch(
         f"--tar_file_name tardir://{os.path.dirname(__file__)}/dagnabbit --use-cvmfs-dropbox",
         f"\\$INPUT_TAR_DIR_LOCAL/ckjobA.sh",
@@ -315,7 +351,7 @@ def test_2_tar_dir_cvmfs(dune, add_links):
 
 
 @pytest.mark.integration
-def test_2_dash_f_dropbox_pnfs(dune):
+def test_2_dash_f_dropbox_pnfs(dune_token, dune):
     lookaround_launch(
         f"-f dropbox://{__file__} --use-pnfs-dropbox",
         f"\\$CONDOR_DIR_INPUT/{os.path.basename(__file__)}",
@@ -340,12 +376,12 @@ def dagnabbit_launch(extra, which="", nout_files=5):
 
 
 @pytest.mark.integration
-def test_2_launch_dagnabbit_simple(samdev):
+def test_2_launch_dagnabbit_simple(samdev_token, samdev):
     dagnabbit_launch("--devserver", "")
 
 
 @pytest.mark.integration
-def test_2_launch_dagnabbit_complex(samdev):
+def test_2_launch_dagnabbit_complex(samdev_token, samdev):
     os.environ["JOBSUB_EXPORTS"] = ""
     os.environ["SUBMIT_FLAGS"] = ""
 
@@ -410,7 +446,7 @@ def fife_launch(extra):
 
 
 @pytest.mark.integration
-def test_2_samdev_fife_launch(samdev):
+def test_2_samdev_fife_launch(samdev_token, samdev):
     fife_launch("--devserver")
 
 
