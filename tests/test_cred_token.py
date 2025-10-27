@@ -1,7 +1,5 @@
 from collections import namedtuple
-import grp
 import os
-import pwd
 import shutil
 import sys
 
@@ -24,11 +22,7 @@ if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
     sys.path.append("/opt/jobsub_lite/lib")
 else:
     sys.path.append("../lib")
-import creds
-import cred_proxy
 import cred_token
-from defaults import DEFAULT_ROLE
-from test_unit import TestUnit
 
 
 @pytest.fixture
@@ -53,9 +47,13 @@ _TokenLocationAndReverser = namedtuple(
     "_TokenLocationAndReverser", ["token_location", "preserve_or_reverse_func"]
 )
 _token_locations_and_reversers = (
-    _TokenLocationAndReverser("fake_ifdh_tokens/fermilab.token", lambda x: x),
+    _TokenLocationAndReverser(
+        f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token", lambda x: x
+    ),
     _TokenLocationAndReverser("thispathdoesntexist", lambda x: not x),
-    _TokenLocationAndReverser("fake_ifdh_tokens/expired.token", lambda x: not x),
+    _TokenLocationAndReverser(
+        f"{os.path.dirname(__file__)}/fake_ifdh_tokens/expired.token", lambda x: not x
+    ),
 )
 
 
@@ -70,7 +68,6 @@ class TestCheckToken:
         self,
         token_locations_and_reverser,
         monkeypatch,
-        clear_bearer_token_file,
     ):
         monkeypatch.setenv(
             "BEARER_TOKEN_FILE", token_locations_and_reverser.token_location
@@ -82,8 +79,11 @@ class TestCheckToken:
         )
 
     @pytest.mark.unit
-    def test_checkToken_wrong_group_raises(self, monkeypatch, clear_bearer_token_file):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab.token")
+    def test_checkToken_wrong_group_raises(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token",
+        )
         group = "fakegroup"
         with pytest.raises(ValueError, match="wrong group"):
             cred_token.checkToken(group)
@@ -91,8 +91,11 @@ class TestCheckToken:
 
 class TestCheckTokenNotExpired:
     @pytest.mark.unit
-    def test_fail(self, clear_bearer_token_file, monkeypatch):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/expired.token")
+    def test_fail(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/expired.token",
+        )
         try:
             token = scitokens.SciToken.discover(insecure=True)
             assert not cred_token.checkToken_not_expired(token)
@@ -100,8 +103,11 @@ class TestCheckTokenNotExpired:
             pass
 
     @pytest.mark.unit
-    def test_success(self, clear_bearer_token_file, monkeypatch):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab.token")
+    def test_success(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token",
+        )
         token = scitokens.SciToken.discover(insecure=True)
         assert cred_token.checkToken_not_expired(token)
 
@@ -113,20 +119,28 @@ _BadCheckTokenTestCase = namedtuple(
 )
 _bad_checkToken_test_cases = (
     _BadCheckTokenTestCase(
-        "fake_ifdh_tokens/no_groups.token", "fermilab", TypeError, r"wlcg\.groups", None
+        f"{os.path.dirname(__file__)}/fake_ifdh_tokens/no_groups.token",
+        "fermilab",
+        TypeError,
+        r"wlcg\.groups",
+        None,
     ),
     _BadCheckTokenTestCase(
-        "fake_ifdh_tokens/malformed.token",
+        f"{os.path.dirname(__file__)}/fake_ifdh_tokens/malformed.token",
         "fermilab",
         TypeError,
         "malformed.*list",
         None,
     ),
     _BadCheckTokenTestCase(
-        "fake_ifdh_tokens/fermilab.token", "badgroup", ValueError, "wrong group", None
+        f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token",
+        "badgroup",
+        ValueError,
+        "wrong group",
+        None,
     ),
     _BadCheckTokenTestCase(
-        "fake_ifdh_tokens/fermilab.token",
+        f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token",
         "fermilab",
         ValueError,
         "wrong group or role",
@@ -142,16 +156,20 @@ def bad_checkToken_test_case(request):
 
 class TestCheckTokenRightGroupAndRole:
     @pytest.mark.unit
-    def test_good(self, clear_bearer_token_file, monkeypatch):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab.token")
+    def test_good(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token",
+        )
         group = "fermilab"
         token = scitokens.SciToken.discover(insecure=True)
         cred_token.checkToken_right_group_and_role(token, group)
 
     @pytest.mark.unit
-    def test_good_with_role(self, clear_bearer_token_file, monkeypatch):
+    def test_good_with_role(self, monkeypatch):
         monkeypatch.setenv(
-            "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab_production.token",
         )
         group = "fermilab"
         role = "production"
@@ -159,10 +177,11 @@ class TestCheckTokenRightGroupAndRole:
         cred_token.checkToken_right_group_and_role(token, group, role)
 
     @pytest.mark.unit
-    def test_good_with_role_different_case(self, clear_bearer_token_file, monkeypatch):
+    def test_good_with_role_different_case(self, monkeypatch):
         """Should still pass because we should be case-insensitive"""
         monkeypatch.setenv(
-            "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab_production.token",
         )
         group = "fermilab"
         role = "Production"
@@ -170,7 +189,7 @@ class TestCheckTokenRightGroupAndRole:
         cred_token.checkToken_right_group_and_role(token, group, role)
 
     @pytest.mark.unit
-    def test_bad(self, bad_checkToken_test_case, clear_bearer_token_file, monkeypatch):
+    def test_bad(self, bad_checkToken_test_case, monkeypatch):
         monkeypatch.setenv("BEARER_TOKEN_FILE", bad_checkToken_test_case.token_location)
         group = bad_checkToken_test_case.group
         token = scitokens.SciToken.discover(insecure=True)
@@ -198,9 +217,7 @@ class TestGetToken:
             cred_token.getToken("Analysis")
 
     @pytest.mark.unit
-    def test_bearer_token_file_good(
-        self, monkeypatch, clear_bearer_token_file, set_group_fermilab
-    ):
+    def test_bearer_token_file_good(self, monkeypatch, set_group_fermilab):
         monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab.token")
         assert (
             cred_token.getToken("fermilab", "Analysis")
@@ -208,32 +225,38 @@ class TestGetToken:
         )
 
     @pytest.mark.unit
-    def test_bearer_token_file_expired(
-        self, monkeypatch, tmp_path, clear_bearer_token_file
-    ):
+    def test_bearer_token_file_expired(self, monkeypatch, tmp_path):
         # Since the token is expired, a new, valid token should show up at BEARER_TOKEN_FILE
         token_path = tmp_path / "expired.token"
-        shutil.copy("fake_ifdh_tokens/expired.token", token_path)
+        shutil.copy(
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/expired.token", token_path
+        )
         monkeypatch.setenv("BEARER_TOKEN_FILE", str(token_path))
         monkeypatch.setenv("GROUP", "fermilab")
         assert cred_token.getToken("fermilab", "Analysis")
 
     @pytest.mark.unit
-    def test_bearer_token_file_wrong_group(self, monkeypatch, clear_bearer_token_file):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab.token")
+    def test_bearer_token_file_wrong_group(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab.token",
+        )
         monkeypatch.setenv("GROUP", "bogus")
         with pytest.raises(ValueError, match="wrong group"):
             cred_token.getToken()
 
     @pytest.mark.unit
-    def test_bearer_token_file_malformed(self, monkeypatch, clear_bearer_token_file):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/malformed.token")
+    def test_bearer_token_file_malformed(self, monkeypatch):
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/malformed.token",
+        )
         monkeypatch.setenv("GROUP", "fermilab")
         with pytest.raises(TypeError, match="malformed"):
             cred_token.getToken()
 
     @pytest.mark.unit
-    def test_bearer_token_file_not_exist(self, monkeypatch, clear_bearer_token_file):
+    def test_bearer_token_file_not_exist(self, monkeypatch):
         monkeypatch.setenv("BEARER_TOKEN_FILE", "thisfiledoesnotexist")
         monkeypatch.setenv("GROUP", "fermilab")
         token_file = cred_token.getToken("fermilab", "Analysis")

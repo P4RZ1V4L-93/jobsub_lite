@@ -418,13 +418,17 @@ class TestGetRole:
     @pytest.mark.unit
     def test_getRole_from_valid_token(self, monkeypatch):
         monkeypatch.setenv(
-            "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/fermilab_production.token",
         )
         assert cred_token.getRole_from_valid_token() == "Production"
 
     @pytest.mark.unit
     def test_getRole_from_valid_token_invalid(self, monkeypatch):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/malformed.token")
+        monkeypatch.setenv(
+            "BEARER_TOKEN_FILE",
+            f"{os.path.dirname(__file__)}/fake_ifdh_tokens/malformed.token",
+        )
         with pytest.raises(TypeError, match="malformed.*list"):
             cred_token.getRole_from_valid_token()
 
