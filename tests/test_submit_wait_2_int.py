@@ -104,9 +104,10 @@ def dune(job_envs):
 
 
 @pytest.fixture
-def samdev_token():
+def samdev_token(clear_bearer_token_file):
     old_btf = os.environ.get("BEARER_TOKEN_FILE", None)
-    yield cred_token.getToken(group="fermilab", role="Analysis")
+    cred_token.getToken(group="fermilab", role="Analysis")
+    yield
     if old_btf is not None:
         os.environ["BEARER_TOKEN_FILE"] = old_btf
     else:
@@ -115,9 +116,10 @@ def samdev_token():
 
 
 @pytest.fixture
-def dune_token():
+def dune_token(clear_bearer_token_file):
     old_btf = os.environ.get("BEARER_TOKEN_FILE", None)
-    yield cred_token.getToken(group="dune", role="Analysis")
+    cred_token.getToken(group="dune", role="Analysis")
+    yield
     if old_btf is not None:
         os.environ["BEARER_TOKEN_FILE"] = old_btf
     else:
@@ -126,9 +128,10 @@ def dune_token():
 
 
 @pytest.fixture
-def nova_token():
+def nova_token(clear_bearer_token_file):
     old_btf = os.environ.get("BEARER_TOKEN_FILE", None)
-    yield cred_token.getToken(group="nova", role="Analysis")
+    cred_token.getToken(group="nova", role="Analysis")
+    yield
     if old_btf is not None:
         os.environ["BEARER_TOKEN_FILE"] = old_btf
     else:
@@ -258,13 +261,13 @@ class dircontext:
         os.chdir(self.returnto)
 
 
-# TODO This should use the test managed proxy
 def condor_dag_launch(dagfile, extra=""):
     """launch a dag from our dag test area"""
 
     # need some environment variables to fill in the submit files...
-    # proxy = fake_ifdh.getProxy("Analysis")
-    proxy = fake_ifdh.getToken(group="fermilab", role="Analysis")
+    proxy = os.environ.get("X509_USER_PROXY", None)
+    if proxy is None:
+        raise AssertionError("X509_USER_PROXY not set for condor_dag_launch")
     with os.popen(f"openssl x509 -subject -noout -in {proxy}") as subjin:
         line = subjin.readline()
         line = line.strip().replace("subject= ", "")

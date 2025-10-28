@@ -23,7 +23,6 @@ else:
     sys.path.append("../lib")
 import cred_proxy
 from defaults import DEFAULT_ROLE
-from test_unit import TestUnit
 
 
 class TestGetTmp:
