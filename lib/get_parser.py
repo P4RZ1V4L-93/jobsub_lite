@@ -24,9 +24,9 @@ from version import version_string
 
 from condor import get_schedd_names
 from creds import SUPPORTED_AUTH_METHODS, REQUIRED_AUTH_METHODS
+from defaults import DEFAULT_USAGE_MODELS, DEFAULT_SINGULARITY_IMAGE
 import pool
 from skip_checks import SupportedSkipChecks
-from utils import DEFAULT_USAGE_MODELS, DEFAULT_SINGULARITY_IMAGE
 
 
 def verify_executable_starts_with_file_colon(s: str) -> str:

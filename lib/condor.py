@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" condor related routines """
+"""condor related routines"""
 from contextlib import contextmanager
 import os
 import pathlib
@@ -30,7 +30,7 @@ import classad  # type: ignore
 import htcondor  # type: ignore
 import jinja2  # type: ignore
 
-import fake_ifdh
+import defaults
 import packages
 from render_files import render_files
 from tracing import as_span
@@ -65,7 +65,7 @@ def submit_vt(
             print("vault tokens before pre-submit renaming:")
             os.system(f"ls -l {tmp}/vt_u{uid}*")
         schedvtname = f"{tmp}/vt_u{uid}-{schedd}-{vo}_{role}"
-        if role != fake_ifdh.DEFAULT_ROLE:
+        if role != defaults.DEFAULT_ROLE:
             vtname = f"{tmp}/vt_u{uid}-{vo}_{role}"
         else:
             vtname = f"{tmp}/vt_u{uid}-{vo}"
