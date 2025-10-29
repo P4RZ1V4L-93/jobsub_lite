@@ -2,7 +2,6 @@ import grp
 import os
 import pathlib
 import pwd
-import shutil
 import sys
 import pytest
 
@@ -156,6 +155,20 @@ class TestCheckValidProxy:
         with pytest.raises(
             cred_proxy.JobsubInvalidProxyError,
             match=f"The proxy is not a valid VOMS proxy or has expired",
+        ):
+            cred_proxy.check_valid_proxy(fake_proxy(create_file=False))
+
+    @pytest.mark.unit
+    def test_proxy_unexpected_error(self, monkeypatch, fake_proxy):
+        # Simulate an unexpected error by patching subprocess.run to raise a generic Exception
+        def _mock_run(*args, **kwargs):
+            raise Exception("Unexpected error")
+
+        monkeypatch.setattr("subprocess.run", _mock_run)
+
+        with pytest.raises(
+            cred_proxy.JobsubInvalidProxyError,
+            match="An unexpected error occurred while validating the proxy",
         ):
             cred_proxy.check_valid_proxy(fake_proxy(create_file=False))
 

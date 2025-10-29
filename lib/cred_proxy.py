@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 #
-# proxy -- utility functions for checking and using proxies
+# cred_proxy -- utility functions for checking and using proxies
 #
 # COPYRIGHT 2025 FERMI NATIONAL ACCELERATOR LABORATORY
 #
@@ -126,6 +126,10 @@ def check_valid_proxy(proxy_file: pathlib.Path, verbose: int = 0) -> None:
     except subprocess.CalledProcessError as e:
         raise JobsubInvalidProxyError(
             "The proxy is not a valid VOMS proxy or has expired", str(proxy_file)
+        ) from e
+    except Exception as e:
+        raise JobsubInvalidProxyError(
+            "An unexpected error occurred while validating the proxy", str(proxy_file)
         ) from e
 
 
