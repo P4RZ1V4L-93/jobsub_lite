@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 #
-# token -- utility functions for obtaining, checking, and using tokens
+# cred_token -- utility functions for obtaining, checking, and using tokens
 #
 # COPYRIGHT 2025 FERMI NATIONAL ACCELERATOR LABORATORY
 #
@@ -17,15 +17,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import os
-import io
 import re
-import shlex
-import subprocess
 import sys
 import time
-from typing import Union, Optional, List, Dict, Tuple, Any
+from typing import Union, Optional, List, Tuple, Any
 
 # pylint: disable=import-error
 import jwt  # type: ignore
@@ -35,7 +31,7 @@ import scitokens  # type: ignore
 PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(PREFIX, "lib"))
 
-from defaults import DEFAULT_ROLE
+from defaults import DEFAULT_ROLE  # pylint: disable=wrong-import-position
 import htcondor  # type: ignore # pylint: disable=wrong-import-position
 from tracing import as_span, add_event  # pylint: disable=wrong-import-position
 
@@ -103,7 +99,11 @@ init_scitokens()
 
 @as_span("getToken")
 def getToken(group: str = getExp(), role: str = DEFAULT_ROLE, verbose: int = 0) -> str:
-    """get path to token file"""
+    """get path to token file from the following locations:
+    1. Use $BEARER_TOKEN_FILE if set,
+    2. Use a token file in /tmp/bt_token_<group>_<role>_<uid> if valid
+    3. Make a new token file in /tmp/bt_token_<group>_<role>_<uid>
+    """
     pid = os.getuid()
 
     issuer = group

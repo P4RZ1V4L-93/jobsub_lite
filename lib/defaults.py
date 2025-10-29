@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 #
-# token -- utility functions for obtaining, checking, and using tokens
+# defaults -- default constants for jobsub_lite
 #
 # COPYRIGHT 2025 FERMI NATIONAL ACCELERATOR LABORATORY
 #

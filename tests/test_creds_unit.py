@@ -266,6 +266,7 @@ class TestCredUnit:
         assert os.path.exists(os.environ["BEARER_TOKEN_FILE"])
         assert os.path.exists(cred_set.token)
 
+    # TODO Make this work with managed proxy fixture
     @pytest.mark.integration
     def test_proxy_good_int(
         self, set_required_method_proxy_only, proxy_test_hypot_pro_args, monkeypatch
@@ -315,6 +316,7 @@ class TestCredUnit:
         with pytest.raises(cred_proxy.JobsubInvalidProxyError, match="does not exist"):
             creds.get_creds(proxy_test_hypot_pro_args)
 
+    # TODO Make this work with managed proxy fixture
     @pytest.mark.integration
     def test_proxy_good_default_location_int(
         self,
