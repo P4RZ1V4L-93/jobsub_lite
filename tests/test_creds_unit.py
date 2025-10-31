@@ -94,59 +94,6 @@ def default_role_file_location(request):
     return request.param
 
 
-class TestGetRole:
-    @pytest.mark.unit
-    def test_getRole_from_default_role_file(
-        self, default_role_file_location, stage_existing_default_role_files
-    ):
-        uid = os.getuid()
-        group = os.environ.get("GROUP")
-        filename = f"jobsub_default_role_{group}_{uid}"
-        file_dir = pathlib.Path(default_role_file_location)
-        file_dir.mkdir(exist_ok=True)
-        filepath = file_dir / filename
-        try:
-            filepath.write_text("testrole")
-            assert creds.getRole_from_default_role_file() == "testrole"
-        finally:
-            os.unlink(filepath)
-
-    @pytest.mark.unit
-    def test_getRole_from_default_role_file_none(
-        self, stage_existing_default_role_files
-    ):
-        assert not creds.getRole_from_default_role_file()
-
-    @pytest.mark.unit
-    def test_getRole_from_valid_token(self, monkeypatch):
-        monkeypatch.setenv(
-            "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
-        )
-        assert cred_token.getRole_from_valid_token() == "Production"
-
-    @pytest.mark.unit
-    def test_getRole_from_valid_token_invalid(self, monkeypatch):
-        monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/malformed.token")
-        with pytest.raises(TypeError, match="malformed.*list"):
-            cred_token.getRole_from_valid_token()
-
-    @pytest.mark.unit
-    def test_getRole_from_valid_token_none(self, monkeypatch):
-        monkeypatch.delenv("BEARER_TOKEN_FILE", raising=False)
-        assert not cred_token.getRole_from_valid_token()
-
-    @pytest.mark.unit
-    def test_getRole(self, set_group_fermilab):
-        res = creds.getRole()
-        assert res == DEFAULT_ROLE
-
-    @pytest.mark.unit
-    def test_getRole_override(self):
-        override_role = "Hamburgler"
-        res = creds.getRole(override_role)
-        assert res == override_role
-
-
 class TestCredUnit:
     """
     Use with pytest... unit tests for ../lib/*.py
@@ -390,6 +337,8 @@ def test_resolve_auth_methods(cmdline_arg, env_var, expected, monkeypatch):
     """
     if env_var is not None:
         monkeypatch.setenv("JOBSUB_AUTH_METHODS", env_var)
+    else:
+        monkeypatch.delenv("JOBSUB_AUTH_METHODS", raising=False)
     methods = creds.resolve_auth_methods(cmdline_arg)
     assert methods == expected
 

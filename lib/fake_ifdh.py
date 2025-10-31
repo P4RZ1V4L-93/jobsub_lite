@@ -80,6 +80,7 @@ def chmod(dest: str, mode: int) -> None:
     try:
         os.chmod(dest, mode)
     except (FileNotFoundError, PermissionError):
+        # We don't want to fail the submission over not being able to chmod a file
         pass
 
 

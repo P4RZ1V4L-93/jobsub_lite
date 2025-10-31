@@ -32,7 +32,7 @@ def clear_token():
             try:
                 os.unlink(os.environ["BEARER_TOKEN_FILE"])
             except:
-                pass
+                pass  # If we can't delete the token for tests, it's not a problem
         del os.environ["BEARER_TOKEN_FILE"]
 
 
@@ -96,11 +96,9 @@ class TestCheckTokenNotExpired:
             "BEARER_TOKEN_FILE",
             f"{os.path.dirname(__file__)}/fake_ifdh_tokens/expired.token",
         )
-        try:
+        with pytest.raises(jwt.ExpiredSignatureError):
             token = scitokens.SciToken.discover(insecure=True)
             assert not cred_token.checkToken_not_expired(token)
-        except jwt.ExpiredSignatureError:
-            pass
 
     @pytest.mark.unit
     def test_success(self, monkeypatch):
