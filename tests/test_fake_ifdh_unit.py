@@ -43,59 +43,6 @@ def switch_to_invalid_kerb_cache(monkeypatch, tmp_path):
     yield
 
 
-# class TestGetRole:
-# @pytest.mark.unit
-# def test_getRole_from_default_role_file(
-#     self, default_role_file_location, stage_existing_default_role_files
-# ):
-#     uid = os.getuid()
-#     group = os.environ.get("GROUP")
-#     filename = f"jobsub_default_role_{group}_{uid}"
-#     file_dir = pathlib.Path(default_role_file_location)
-#     file_dir.mkdir(exist_ok=True)
-#     filepath = file_dir / filename
-#     try:
-#         filepath.write_text("testrole")
-#         assert fake_ifdh.getRole_from_default_role_file() == "testrole"
-#     finally:
-#         os.unlink(filepath)
-
-# @pytest.mark.unit
-# def test_getRole_from_default_role_file_none(
-#     self, stage_existing_default_role_files
-# ):
-#     assert not fake_ifdh.getRole_from_default_role_file()
-
-# @pytest.mark.unit
-# def test_getRole_from_valid_token(self, monkeypatch):
-#     monkeypatch.setenv(
-#         "BEARER_TOKEN_FILE", "fake_ifdh_tokens/fermilab_production.token"
-#     )
-#     assert fake_ifdh.getRole_from_valid_token() == "Production"
-
-# @pytest.mark.unit
-# def test_getRole_from_valid_token_invalid(self, monkeypatch):
-#     monkeypatch.setenv("BEARER_TOKEN_FILE", "fake_ifdh_tokens/malformed.token")
-#     with pytest.raises(TypeError, match="malformed.*list"):
-#         fake_ifdh.getRole_from_valid_token()
-
-# @pytest.mark.unit
-# def test_getRole_from_valid_token_none(self, monkeypatch):
-#     monkeypatch.delenv("BEARER_TOKEN_FILE", raising=False)
-#     assert not fake_ifdh.getRole_from_valid_token()
-
-# @pytest.mark.unit
-# def test_getRole(self, set_group_fermilab):
-#     res = fake_ifdh.getRole()
-#     assert res == fake_ifdh.DEFAULT_ROLE
-
-# @pytest.mark.unit
-# def test_getRole_override(self):
-#     override_role = "Hamburgler"
-#     res = fake_ifdh.getRole(override_role)
-#     assert res == override_role
-
-
 @pytest.mark.unit
 def test_getProxy():
     with pytest.raises(

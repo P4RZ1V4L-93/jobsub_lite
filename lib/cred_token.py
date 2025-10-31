@@ -98,12 +98,15 @@ init_scitokens()
 
 
 @as_span("getToken")
-def getToken(group: str = getExp(), role: str = DEFAULT_ROLE, verbose: int = 0) -> str:
+def getToken(
+    group: Optional[str] = None, role: str = DEFAULT_ROLE, verbose: int = 0
+) -> str:
     """get path to token file from the following locations:
     1. Use $BEARER_TOKEN_FILE if set,
     2. Use a token file in /tmp/bt_token_<group>_<role>_<uid> if valid
     3. Make a new token file in /tmp/bt_token_<group>_<role>_<uid>
     """
+    group = getExp() if group is None else group
     pid = os.getuid()
 
     issuer = group
