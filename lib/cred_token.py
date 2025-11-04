@@ -25,20 +25,16 @@ from typing import Union, Optional, List, Tuple, Any
 
 # pylint: disable=import-error
 import jwt  # type: ignore
+import htcondor  # type: ignore # pylint: disable=wrong-import-position
 import scitokens  # type: ignore
 
-# TODO: Do we need this anymore since we're IN lib?  # pylint: disable=fixme
-PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(os.path.join(PREFIX, "lib"))
-
 from defaults import DEFAULT_ROLE  # pylint: disable=wrong-import-position
-import htcondor  # type: ignore # pylint: disable=wrong-import-position
 from tracing import as_span, add_event  # pylint: disable=wrong-import-position
 
 VAULT_OPTS = htcondor.param.get("SEC_CREDENTIAL_GETTOKEN_OPTS", "")
 
 
-# TODO Eventually, the next two funcs should move into utils.py, and be imported from there. But first, utils.py needs to be cleaned up
+# TODO Eventually, the next two funcs should move into utils.py, and be imported from there. But first, utils.py needs to be cleaned up #pylint: disable=fixme
 def getTmp() -> str:
     """return temp directory path"""
     return os.environ.get("TMPDIR", "/tmp")
