@@ -24,9 +24,9 @@ from version import version_string
 
 from condor import get_schedd_names
 from creds import SUPPORTED_AUTH_METHODS, REQUIRED_AUTH_METHODS
+from defaults import DEFAULT_USAGE_MODELS, DEFAULT_SINGULARITY_IMAGE
 import pool
 from skip_checks import SupportedSkipChecks
-from utils import DEFAULT_USAGE_MODELS, DEFAULT_SINGULARITY_IMAGE
 
 
 def verify_executable_starts_with_file_colon(s: str) -> str:
@@ -130,7 +130,7 @@ class CheckIfValidAuthMethod(argparse.Action):
             filter(lambda val: val != "", check_values)
         )  # Clear out empty string
         if len(check_values) == 0:
-            setattr(namespace, self.dest, ",".join(SUPPORTED_AUTH_METHODS))
+            setattr(namespace, self.dest, ",".join(REQUIRED_AUTH_METHODS))
             return
 
         # Check that the requested auth methods include the required auth methods
@@ -196,7 +196,7 @@ def get_base_parser(
         ),
         action=CheckIfValidAuthMethod,
         required=False,
-        default=os.environ.get("JOBSUB_AUTH_METHODS", ",".join(SUPPORTED_AUTH_METHODS)),
+        default=os.environ.get("JOBSUB_AUTH_METHODS", ",".join(REQUIRED_AUTH_METHODS)),
     )
     group.add_argument(
         "-G",

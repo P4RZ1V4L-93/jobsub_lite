@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # pylint: disable=too-many-locals, invalid-name, raise-missing-from, unused-variable, consider-using-enumerate
-""" misc. utility functions """
+"""misc. utility functions"""
 from collections import OrderedDict
 import datetime
 import os
@@ -30,17 +30,12 @@ from typing import Union, Dict, Any, NamedTuple, Tuple, List, Optional
 import uuid
 
 import classad  # type: ignore # pylint: disable=import-error
-from tracing import get_propagator_carrier
-import token_mods
+from tracing import get_propagator_carrier  # pylint: disable=wrong-import-position
 
 from creds import CredentialSet
+from defaults import DEFAULT_SINGULARITY_IMAGE, DEFAULT_USAGE_MODELS, ONSITE_SITE_NAME
+import token_mods
 import version
-
-ONSITE_SITE_NAME = "FermiGrid"
-DEFAULT_USAGE_MODELS = ["DEDICATED", "OPPORTUNISTIC", "OFFSITE"]
-DEFAULT_SINGULARITY_IMAGE = (
-    "/cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-el9:latest"
-)
 
 
 def cleandir(d: str, verbose: int) -> None:
@@ -731,6 +726,11 @@ def check_site_and_blocklist(site: str, blocklist: str) -> None:
     if common_sites:
         raise SiteAndBlocklistConflictError(list(common_sites))
     return None
+
+
+def getTmp() -> str:
+    """return temp directory path"""
+    return os.environ.get("TMPDIR", "/tmp")
 
 
 class SiteAndUsageModelConflictError(Exception):

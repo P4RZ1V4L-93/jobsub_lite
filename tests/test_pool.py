@@ -18,11 +18,12 @@ if os.environ.get("JOBSUB_TEST_INSTALLED", "0") == "1":
 else:
     sys.path.append("../lib")
 
-import condor
 import importlib
+
+import condor
+import defaults
 import packages
 import pool
-import utils
 
 
 @pytest.mark.unit
@@ -38,5 +39,5 @@ def test_set_pool(monkeypatch):
     assert packages.SAVED_ENV["RANDOM_ENV"] == "RANDOM_VALUE"
     assert packages.SAVED_ENV["_condor_COLLECTOR_HOST"] == "hostname.domain"
     assert condor.COLLECTOR_HOST == "hostname.domain"
-    assert utils.ONSITE_SITE_NAME == "MY_ONSITE"
+    assert defaults.ONSITE_SITE_NAME == "MY_ONSITE"
     pool.reset_pool()

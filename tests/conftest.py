@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 
@@ -49,16 +50,26 @@ def set_temp_x509_user_proxy(monkeypatch, set_creds_dir):
 
 
 @pytest.fixture
-def needs_x509_user_proxy(
+def needs_test_managed_proxy(
     monkeypatch,
     set_temp_x509_user_proxy,
     check_user_kerberos_creds,
 ):
     """
-    Fixture to ensure that the X509_USER_PROXY is set and valid.
+    Fixture to ensure that the X509_USER_PROXY is set to the test managed proxy. This proxy must reside
+    at the location specified by INT_X509_USER_PROXY env variable.
     """
-    monkeypatch.setenv("GROUP", TestUnit.test_group)
-    yield creds.get_creds({"role": "Analysis", "auth_methods": "proxy"})
+    try:
+        test_managed_proxy = os.environ["INT_X509_USER_PROXY"]
+    except KeyError:
+        pytest.fail("INT_X509_USER_PROXY environment variable is not set.")
+
+    try:
+        shutil.copy(test_managed_proxy, os.environ["X509_USER_PROXY"])
+    except Exception as e:
+        pytest.fail(f"Failed to copy test managed proxy into place: {e}")
+
+    yield os.environ["X509_USER_PROXY"]
 
 
 @pytest.fixture
@@ -75,17 +86,25 @@ def needs_token(
 
 
 @pytest.fixture
+def needs_token_file(needs_token):
+    """
+    Fixture to ensure that the BEARER_TOKEN_FILE is set and valid. Yields the token file rather
+    than the full CredentialSet
+    """
+    yield needs_token.token
+
+
+@pytest.fixture
 def needs_credentials(
     monkeypatch,
-    needs_token,
-    needs_x509_user_proxy,
+    needs_token_file,
+    needs_test_managed_proxy,
     check_user_kerberos_creds,
 ):
     monkeypatch.setenv("GROUP", TestUnit.test_group)
-    yield creds.get_creds({"role": "Analysis"})
-    cred_set_token = needs_token
-    cred_set_proxy = needs_x509_user_proxy
-    yield creds.CredentialSet(token=cred_set_token.token, proxy=cred_set_proxy.proxy)
+    cred_set_token = needs_token_file
+    cred_set_proxy = needs_test_managed_proxy
+    yield creds.CredentialSet(token=cred_set_token, proxy=cred_set_proxy)
 
 
 @pytest.fixture
@@ -93,6 +112,9 @@ def clear_x509_user_proxy():
     """Clear environment variable X509_USER_PROXY to test credentials overrides"""
     old_x509_user_proxy_value = os.environ.pop("X509_USER_PROXY", None)
     yield
+
+    # If our test set X509_USER_PROXY, remove it
+    os.environ.pop("X509_USER_PROXY", None)
 
     if old_x509_user_proxy_value is not None:
         os.environ["X509_USER_PROXY"] = old_x509_user_proxy_value
@@ -103,6 +125,9 @@ def clear_bearer_token_file():
     """Clear environment variable BEARER_TOKEN_FILE to test credentials overrides"""
     old_bearer_token_file_value = os.environ.pop("BEARER_TOKEN_FILE", None)
     yield
+
+    # If our test set BEARER_TOKEN_FILE, remove it
+    os.environ.pop("BEARER_TOKEN_FILE", None)
 
     if old_bearer_token_file_value is not None:
         os.environ["BEARER_TOKEN_FILE"] = old_bearer_token_file_value
@@ -130,3 +155,40 @@ def set_group_fermilab(monkeypatch):
 @pytest.fixture
 def fakefs(fs):
     yield fs
+
+
+# Credentials fixtures common across multiple modules
+
+
+@pytest.fixture
+def fake_proxy(tmp_path, clear_x509_user_proxy):
+    def inner(create_file=True, mode=0o400):
+        _fake_proxy = tmp_path / "fake_proxy"
+        if create_file:
+            _fake_proxy.touch(mode=mode)
+        return _fake_proxy
+
+    return inner
+
+
+@pytest.fixture
+def voms_proxy_info_exit_code(tmp_path, monkeypatch):
+    def inner(exit_code):
+        old_path = os.environ.get("PATH", "")
+        fake_exe_path = tmp_path
+        monkeypatch.setenv("PATH", str(fake_exe_path) + os.pathsep + old_path)
+        script = f"""#!/bin/bash
+        exit {exit_code}
+        """
+        vpi = tmp_path / "voms-proxy-info"
+        vpi.write_text(script)
+        vpi.chmod(0o755)
+
+    return inner
+
+
+@pytest.fixture
+def set_tmp(monkeypatch, tmp_path):
+    tmp = tmp_path
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    return tmp

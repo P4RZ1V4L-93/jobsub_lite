@@ -9,6 +9,6 @@
     },
     {
         "cmdline_args": "",
-        "auth_methods_result": "token,proxy"
+        "auth_methods_result": "token"
     }
 ]

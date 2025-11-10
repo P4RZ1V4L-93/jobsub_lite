@@ -15,3 +15,7 @@ tests/__pycache__/*
 # Test artifacts
 tests/*.tbz2
 tests/dagnabbit/*.tbz2
+
+# Local environment files
+.env
+.venv/

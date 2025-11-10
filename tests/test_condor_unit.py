@@ -122,6 +122,14 @@ class TestCondorUnit:
     Use with pytest... unit tests for ../lib/*.py
     """
 
+    @staticmethod
+    @pytest.fixture(autouse=True)
+    def clear_schedds():
+        from importlib import reload
+
+        condor.__schedd_ads = {}
+        reload(condor)
+
     # lib/condor.py routines...
 
     @pytest.mark.unit

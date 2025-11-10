@@ -10,9 +10,9 @@ import json
 import functools
 import os
 from typing import Any, Union
-import utils
 
 import condor
+import defaults
 import packages
 
 
@@ -41,9 +41,9 @@ def set_pool(name: str) -> None:
     )
     if not SAVE_COLLECTOR_HOST:
         SAVE_COLLECTOR_HOST = condor.COLLECTOR_HOST
-        SAVE_ONSITE_SITE_NAME = utils.ONSITE_SITE_NAME
+        SAVE_ONSITE_SITE_NAME = defaults.ONSITE_SITE_NAME
     condor.COLLECTOR_HOST = poolmap[name]["collector"]
-    utils.ONSITE_SITE_NAME = poolmap[name]["onsite"]
+    defaults.ONSITE_SITE_NAME = poolmap[name]["onsite"]
 
 
 def reset_pool() -> None:
@@ -54,7 +54,7 @@ def reset_pool() -> None:
         del packages.SAVED_ENV["_condor_COLLECTOR_HOST"]
     if SAVE_COLLECTOR_HOST:
         condor.COLLECTOR_HOST = SAVE_COLLECTOR_HOST
-        utils.ONSITE_SITE_NAME = SAVE_ONSITE_SITE_NAME
+        defaults.ONSITE_SITE_NAME = SAVE_ONSITE_SITE_NAME
 
 
 class SetPool(argparse.Action):
