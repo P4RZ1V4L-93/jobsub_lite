@@ -38,11 +38,14 @@ export BEARER_TOKEN_FILE=$PWD/.condor_creds/{{group}}_{{oauth_handle}}.use
 fi
 
 # Set up parameters used by cvmfs_info function
-CVMFS_REPO_TYPE_LIST=(opensciencegrid osgstorage)
 CVMFS_REPO_LIST=({{group}}
 {%- if group in ('dune','sbnd','icarus','lariat','argoneut') %} larsoft{% endif -%}
 {%- if group in ('sbnd','icarus') %} sbn{% endif -%}
 )
+# list of groups that have osgstorage (OSFD/StashCache) CVMFS repo
+CVMFS_REPO_OSGSTORAGE_LIST=(des dune icarus minerva mu2e nova sbnd sbn uboone)
+# list of RCDS CVMFS repos
+CVMFS_REPO_RCDS_LIST=(fifeuser{1..4})
 
 set_jobsub_debug(){
     export PS4='$LINENO:'
@@ -394,18 +397,19 @@ ${JSB_TMP}/ifdh.sh cp -D $CONDOR_DIR_{{pair[0]}}/* {{pair[1]}}
 cvmfs_info() {
     cvmfs_repo=${1}
     cvmfs_repo_type=${2}
-    if test -d /cvmfs/${cvmfs_repo}.${cvmfs_repo_type}.org/;
-    then
-        echo "cvmfs info repo: ${cvmfs_repo}.${cvmfs_repo_type}.org" >&2
-    else
-        echo "cvmfs info repo: ${cvmfs_repo}.${cvmfs_repo_type}.org not present" >&2
-        return
-    fi
     # pick filter based on job status, whether we have multiple "switched to catalog revision" lines
+    echo >&2
     if [ $JOB_RET_STATUS = 0 ]
     then
         filter="grep to.catalog.revision | tail -1"
     else
+        if test -d /cvmfs/${cvmfs_repo}.${cvmfs_repo_type}.org/;
+        then
+            echo "cvmfs info repo: ${cvmfs_repo}.${cvmfs_repo_type}.org" >&2
+        else
+            echo "cvmfs info repo: ${cvmfs_repo}.${cvmfs_repo_type}.org not present" >&2
+            return
+        fi
         dummyline="__dummy__to_catalog_revision"
         second_latest_rev_re=$( (echo "$dummyline"; attr -g logbuffer /cvmfs/${cvmfs_repo}.${cvmfs_repo_type}.org/) |
                               grep to.catalog.revision |
@@ -425,6 +429,7 @@ cvmfs_info() {
 
     # now log filtered messages to ifdh, and into stderr
 
+    attr -g revision /cvmfs/${cvmfs_repo}.${cvmfs_repo_type}.org/ >&2
     attr -g logbuffer /cvmfs/${cvmfs_repo}.${cvmfs_repo_type}.org/ |
         grep -v '^$' |
         eval "$filter" |
@@ -435,13 +440,33 @@ cvmfs_info() {
         done
 }
 
-for CVMFS_REPO in ${CVMFS_REPO_LIST[@]}
-do
-    for CVMFS_REPO_TYPE in ${CVMFS_REPO_TYPE_LIST[@]}
+# log cvmfs info, in case of job failure
+if [ $JOB_RET_STATUS != 0 ]
+then
+    echo >&2
+    echo "==========================" >&2
+    echo "Below are CVMFS log details for expert debugging purposes only.  The job may have failed for unrelated reasons" >&2
+
+    #check opensciencegrid CVMFS repos
+    for CVMFS_REPO in ${CVMFS_REPO_LIST[@]}
     do
-        cvmfs_info ${CVMFS_REPO} ${CVMFS_REPO_TYPE}
+        cvmfs_info ${CVMFS_REPO} "opensciencegrid"
     done
-done
+
+    #check osgstorage CVMFS repos
+    for CVMFS_REPO in ${CVMFS_REPO_LIST[@]}
+    do
+        [[ ${CVMFS_REPO_OSGSTORAGE_LIST[@]} =~ (^|[[:space:]])${CVMFS_REPO}($|[[:space:]]) ]] && cvmfs_info ${CVMFS_REPO} "osgstorage"
+    done
+
+    #check RCDS CVMFS repos
+    for CVMFS_REPO in ${CVMFS_REPO_RCDS_LIST[@]}
+    do
+        cvmfs_info ${CVMFS_REPO} "opensciencegrid"
+    done
+
+    echo "==========================" >&2
+fi
 
 echo `date` $JOBSUB_EXE_SCRIPT COMPLETED with exit status $JOB_RET_STATUS
 echo `date` $JOBSUB_EXE_SCRIPT COMPLETED with exit status $JOB_RET_STATUS 1>&2
