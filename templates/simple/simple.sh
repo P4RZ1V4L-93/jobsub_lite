@@ -126,15 +126,21 @@ redirect_output_start(){
 redirect_output_finish(){
     exec 1>&7 7>&-
     exec 2>&8 8>&-
+
+    # look in the local job ad file the value of NumJobStarts to check if the job has been restarted,
+    # if this is the case, set the env var myNumJobStarts with a suffix to append to the log files,
+    # this is to prevent new log files to clash with previous version of log files in the dCache sandbox area.
+    myNumJobStarts=$(awk -F "=" '/^NumJobStarts / {print int($2)}' ${_CONDOR_JOB_AD})
+    [[ ${myNumJobStarts} -ne 0 ]] && myNumJobStarts=".v${myNumJobStarts}" || unset myNumJobStarts
+
     jobsub_truncate ${JSB_TMP}/JOBSUB_ERR_FILE 1>&2
     jobsub_truncate ${JSB_TMP}/JOBSUB_LOG_FILE
     {%if outurl%}
     {% set filebase %}{{executable|basename}}{{datetime}}{{uuid}}cluster.$CLUSTER.$PROCESS{% endset %}
-    IFDH_CP_MAXRETRIES=1 ${JSB_TMP}/ifdh.sh cp ${JSB_TMP}/JOBSUB_ERR_FILE.truncated {{outurl}}/{{filebase}}.err
-    IFDH_CP_MAXRETRIES=1 ${JSB_TMP}/ifdh.sh cp ${JSB_TMP}/JOBSUB_LOG_FILE.truncated {{outurl}}/{{filebase}}.out
+    IFDH_CP_MAXRETRIES=1 ${JSB_TMP}/ifdh.sh cp ${JSB_TMP}/JOBSUB_ERR_FILE.truncated {{outurl}}/{{filebase}}${myNumJobStarts}.err
+    IFDH_CP_MAXRETRIES=1 ${JSB_TMP}/ifdh.sh cp ${JSB_TMP}/JOBSUB_LOG_FILE.truncated {{outurl}}/{{filebase}}${myNumJobStarts}.out
     {%endif%}
 }
-
 
 normal_exit(){
     redirect_output_finish
