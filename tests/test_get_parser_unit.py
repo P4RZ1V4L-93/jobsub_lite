@@ -329,6 +329,18 @@ def schedd_for_testing_arg_parser():
     return parser
 
 
+@pytest.fixture
+def executable_arg_parser():
+    """This fixture sets up a lightweight ArgumentParser to test the executable argument"""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "executable", type=str, action=get_parser.CheckExecutable, nargs="?"
+    )
+    return parser
+
+
 class TestGetParserUnit:
     """
     Use with pytest... unit tests for ../lib/*.py
@@ -342,8 +354,8 @@ class TestGetParserUnit:
         Try a few common arguments on a get_parser() generated parser
         """
         parser = get_parser.get_parser()
-        line = "jobsub_submit --devserver -e SAM_EXPERIMENT -G {0} --resource-provides=usage_model=OPPORTUNISTIC,DEDICATED,OFFSITE file://`pwd`/lookaround.sh".format(
-            TestUnit.test_group
+        line = "jobsub_submit --devserver -e SAM_EXPERIMENT -G {0} --resource-provides=usage_model=OPPORTUNISTIC,DEDICATED,OFFSITE file://{1}/job_scripts/lookaround.sh".format(
+            TestUnit.test_group, os.getcwd()
         )
         line_argv = line.strip().split()[1:]
         res = parser.parse_args(line_argv)
@@ -646,7 +658,7 @@ class TestGetParserUnit:
         after parsing args"""
         old_managed_token_env_value = os.environ.get("JOBSUB_MANAGED_TOKEN", None)
         monkeypatch.delenv("JOBSUB_MANAGED_TOKEN", raising=False)
-        args = get_parser.get_parser().parse_args([])
+        args = get_parser.get_parser().parse_args(["file:///bin/true"])
         try:
             assert not args.managed_token
         finally:
@@ -674,7 +686,7 @@ class TestGetParserUnit:
         JOBSUB_MANAGED_TOKEN."""
         monkeypatch.setenv("JOBSUB_MANAGED_TOKEN", env_value)
 
-        args = get_parser.get_parser().parse_args([])
+        args = get_parser.get_parser().parse_args(["file:///bin/true"])
         assert args.managed_token == expected_value
 
     @pytest.mark.parametrize(
@@ -714,3 +726,24 @@ class TestGetParserUnit:
             captured = capsys.readouterr()
             assert "jobsub_lite" in captured.out
             assert "version" in captured.out
+
+    @pytest.mark.unit
+    def test_executable_arg_parser_valid(self, executable_arg_parser):
+        """This test makes sure that if we pass a valid executable argument,
+        we are allowed to proceed"""
+        args = executable_arg_parser.parse_args(["file:///bin/true"])
+        assert args.executable == "file:///bin/true"
+
+    @pytest.mark.unit
+    def test_executable_arg_parser_invalid(self, executable_arg_parser):
+        """This test makes sure that if we pass an invalid executable argument,
+        we get a TypeError"""
+        with pytest.raises(TypeError, match="executable must start with file://"):
+            executable_arg_parser.parse_args(["/bin/true"])
+
+    @pytest.mark.unit
+    def test_executable_arg_parser_invalid_DNE(self, executable_arg_parser):
+        """This test makes sure that if we pass an invalid executable argument,
+        we get a TypeError"""
+        with pytest.raises(FileNotFoundError, match="executable path does not exist"):
+            executable_arg_parser.parse_args(["file:///bin/doesnotexist"])

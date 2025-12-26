@@ -29,16 +29,6 @@ import pool
 from skip_checks import SupportedSkipChecks
 
 
-def verify_executable_starts_with_file_colon(s: str) -> str:
-    """routine to give argparse to verify the executable parameter,
-    which is supposed to be given as a file:///path URL
-    -- note we could check the file exists here, too.
-    """
-    if s.startswith("file://"):
-        return s
-    raise TypeError("executable must start with file://")
-
-
 # Custom actions for parsers
 class StoreGroupinEnvironment(argparse.Action):
     """Action to store the given group in the GROUP environment variable"""
@@ -162,6 +152,32 @@ class CheckIfValidAuthMethod(argparse.Action):
             if len(close_match) > 0
             else ""
         )
+
+
+class CheckExecutable(argparse.Action):
+    """Action to check if the user has properly specified an executable and that the executable exists"""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: Any,
+        option_string: Union[None, str] = None,
+    ) -> None:
+        regex = re.compile(r"file://(.+)")
+        m = regex.match(str(values))
+        if not m:
+            raise TypeError("executable must start with file://")
+        executable_path = m.group(1)
+        if not os.path.exists(executable_path):
+            raise FileNotFoundError(
+                f"executable path does not exist: {executable_path}"
+            )
+
+        # Note that this sets self.dest to something like file:///path/to/executable, rather than
+        # just /path/to/executable. This is because we do some processing in utils.py to handle the file:// prefix appropriately.
+        # In the future, we may want to move that processing here
+        setattr(namespace, self.dest, values)
 
 
 # Parsers
@@ -640,10 +656,11 @@ def get_parser(
     )
     parser.add_argument(
         "executable",
-        type=verify_executable_starts_with_file_colon,
-        default=None,
+        type=str,
+        action=CheckExecutable,
         nargs="?",
         help="executable for job to run",
+        default=None,
     )
 
     usage_model_group = parser.add_mutually_exclusive_group()
