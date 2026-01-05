@@ -744,6 +744,6 @@ class TestGetParserUnit:
     @pytest.mark.unit
     def test_executable_arg_parser_invalid_DNE(self, executable_arg_parser):
         """This test makes sure that if we pass an invalid executable argument,
-        we get a TypeError"""
+        we get a FileNotFoundError"""
         with pytest.raises(FileNotFoundError, match="executable path does not exist"):
             executable_arg_parser.parse_args(["file:///bin/doesnotexist"])
