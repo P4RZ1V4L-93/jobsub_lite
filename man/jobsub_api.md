@@ -106,7 +106,8 @@ based on the jobsub_submit script arguents, see that documentation for more deta
 	- maxConcurrent -- maxumum number of jobs to run simultaneously
 	- memory -- amount of memory to request allows suffixes from KB,MB,GB,TB
 	- need_scope -- scopes needed in job auth tokens
-	- need_storage_modify -- paths to ave storage:modif in auth token scope
+	- need_storage_modify -- paths to have storage:modify in auth token scope
+	- need_storage_stage -- paths to have storage:stage in auth token scope
 	- N -- number of jobs to submit
 	- no_env_cleanup -- do not clean environment in wrapper script
 	- OS -- operating system to request, can be multiples comma separated

@@ -280,6 +280,12 @@ def get_submit_parser(
         help="directories needing storage.modify scope in job tokens",
     )
     parser.add_argument(
+        "--need-storage-stage",
+        action="append",
+        default=[],
+        help="directories needing storage.stage scope in job tokens",
+    )
+    parser.add_argument(
         "--need-scope",
         action="append",
         default=[],

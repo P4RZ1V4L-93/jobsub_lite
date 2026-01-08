@@ -18,6 +18,7 @@ jobsub_submit
                      [-L LOG_FILE]
                      [-l LINES]
                      [--need-storage-modify NEED_STORAGE_MODIFY]
+                     [--need-storage-stage NEED_STORAGE_STAGE]
                      [--need-scope NEED_SCOPE]
                      [-Q] [--mail_on_error] [--mail_always]
                      [--maxConcurrent MAXCONCURRENT] [--memory MEMORY]
@@ -37,7 +38,7 @@ jobsub_submit
 .SH DESCRIPTION
 
 A part of the jobsub_lite suite, jobsub_submit will use command line arguments to generate HTCondor job submission files and a wrapper script, and submits jobs or DAGs of jobs to HTCondor.
-It will submit a job with SciToken authentication, and by default request a weakened scope in the tokens delivered to jobs (currently turning off storage.modify permissions), further modifications to the requested scope can be made with the --need-storage-modify and --need-scope flags.
+It will submit a job with SciToken authentication, and by default request a weakened scope in the tokens delivered to jobs (currently turning off storage.modify and storage.stage permissions), further modifications to the requested scope can be made with the --need-storage-modify, --need-storage-stage, and --need-scope flags.
 .SH OPTIONS
 positional arguments:
 .HP
@@ -157,6 +158,9 @@ Lines to append to the job file.
 .HP
 --need-storage-modify NEED_STORAGE_MODIFY
 directories needing storage.modify scope in job tokens
+.HP
+--need-storage-stage NEED_STORAGE_STAGE
+directories needing storage.stage scope in job tokens
 .HP
 --need-scope NEED_SCOPE
 scopes needed in job tokens

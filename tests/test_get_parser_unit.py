@@ -199,6 +199,8 @@ def all_test_args():
         "xxmemoryxx",
         "--need-storage-modify",
         "xxneed-storage-modifyxx",
+        "--need-storage-stage",
+        "xxneed-storage-stagexx",
         "--need-scope",
         "xxneed-scopexx",
         "--no-env-cleanup",
