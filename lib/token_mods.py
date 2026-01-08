@@ -1,22 +1,25 @@
 """
-    Routines to deal with token scopes (permissions) which
-    are stored in the "scope": entry of the Scitoken, and
-    are generally a space-separated list of group.property:path
-    style entries, with the group and path optional
+Routines to deal with token scopes (permissions) which
+are stored in the "scope": entry of the Scitoken, and
+are generally a space-separated list of group.property:path
+style entries, with the group and path optional
 """
 
 import os
 import os.path
 import shutil
 import sys
-from typing import List, Set
+from typing import List, Optional, Set
 
 import scitokens  # type: ignore # pylint: disable=import-error
 import packages
 
 
 def get_job_scopes(
-    tokenfile: str, need_modify: List[str], need_scopes: List[str]
+    tokenfile: str,
+    need_modify: Optional[List[str]] = None,
+    need_stage: Optional[List[str]] = None,
+    need_scopes: Optional[List[str]] = None,
 ) -> List[str]:
     """
     get the scope for this job submission
@@ -26,14 +29,25 @@ def get_job_scopes(
     * add any scopes listed in need_scopes
     and return that revised list
     """
-    # clean_tokens: scope entries we scrub by default, currently just storage.modify
-    #   if we were doing a config file this should probably be a config item...
-    clean_tokens = set(["storage.modify"])
+    # Handle default arguments - basically cast them to empty lists if None
+    need_modify = [] if not need_modify else need_modify
+    need_stage = [] if not need_stage else need_stage
+    need_scopes = [] if not need_scopes else need_scopes
+
+    # clean_tokens: scope entries we scrub by default, currently storage.modify and storage.stage
+    # This is also configurable via the JOBSUB_SCOPES_DROP environment variable, which takes a comma-separated
+    # list of scope types to drop.
+    clean_tokens = set(
+        os.environ.get("JOBSUB_SCOPES_DROP", "storage.modify,storage.stage").split(",")
+    )
 
     orig_scope = get_token_scope(tokenfile)
     job_scope = scope_without(clean_tokens, orig_scope)
     for dpath in need_modify:
         job_scope = add_subpath_scope("storage.modify", dpath, job_scope, orig_scope)
+
+    for spath in need_stage:
+        job_scope = add_subpath_scope("storage.stage", spath, job_scope, orig_scope)
 
     for sc in need_scopes:
         # do not know how to check if these are allowed...
@@ -109,7 +123,7 @@ def add_subpath_scope(
         # common user mistake, giving mounted path /pnfs/experiment/...
         # instead of /experiment/...
         new_path = add_path[add_path.find("/", 1) :]
-        msg = "warning: detected wrong --need-storage-modify path:\n"
+        msg = "warning: detected wrong requested scope path:\n"
         msg = f"{msg} converting from {add_path}\n            to {new_path}\n"
 
         sys.stderr.write(msg)
@@ -119,6 +133,9 @@ def add_subpath_scope(
         if s.find(":") > 0:
             s_sctype, s_path = s.split(":", 1)
 
+            # This is the key here.  We check that the scope type matches,
+            # and that the requested path add_path is a subpath of the original
+            # scope's path s_path.
             if (
                 s_sctype == add_sctype
                 and os.path.commonpath([s_path, add_path]) == s_path
