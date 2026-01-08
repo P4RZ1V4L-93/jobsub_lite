@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/bash -x
 
 {% if token is defined and token %}
 {% if role and role != 'Analysis' %}

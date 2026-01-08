@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 
 # simple job wrapper
@@ -178,7 +178,7 @@ setup_ifdh_env(){
 # keep it from interfering with users ifdh set up
 #
 cat << '_HEREDOC_' > ${JSB_TMP}/ifdh.sh
-#!/bin/sh
+#!/bin/bash
 #
 which ifdh > /dev/null 2>&1
 has_ifdh=$?
