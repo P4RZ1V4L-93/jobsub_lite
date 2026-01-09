@@ -173,4 +173,4 @@ def test_add_subpath_scope_2(sample_sl):
     scsubdir = "/other/path/not/allowed"
 
     with pytest.raises(PermissionError):
-        nscl = token_mods.add_subpath_scope(sctyp, scsubdir, sample_sl, orig_scl)
+        token_mods.add_subpath_scope(sctyp, scsubdir, sample_sl, orig_scl)
