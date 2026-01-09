@@ -42,28 +42,93 @@ def sample_sl():
     ]
 
 
-def test_get_job_scopes(sample_sl):
+def test_get_job_scopes():
     """layer jobsub_submit calls to get desired job scope..."""
+    # sample mu2e token with modify generated from https://demo.scitokens.org/. The scopes in that token are:
+    # storage.modify:/mu2e/scratch/users/username/out1/d1
+    # storage.modify:/mu2e/scratch/users/username/out1/d2
+    # foo
+    # bar
+    # storage.create:/mu2e/scratch/users/username
+    # compute.modify
+    # storage.modify:/mu2e/scratch/users/username
+    # storage.stage:/mu2e/scratch/users/username
+    tokenf = "decode_token_tests/mp1"
 
-    tokenf = "decode_token_tests/mp1"  # sample mu2e token with modify generated from https://demo.scitokens.org/
     need_modify = [
         "/mu2e/scratch/users/username/out1/d1",
         "/mu2e/scratch/users/username/out2/d2",
     ]
+    need_stage = [
+        "/mu2e/scratch/users/username/stage1",
+        "/mu2e/scratch/users/username/stage2",
+    ]
     need_scope = ["foo", "bar"]
 
-    job_scopes = token_mods.get_job_scopes(tokenf, need_modify, need_scope)
+    job_scopes = token_mods.get_job_scopes(tokenf, need_modify, need_stage, need_scope)
     print(f"got job scopes: {repr(job_scopes)}")
+
     # check things we added
-    assert "storage.modify:/mu2e/scratch/users/username/out1/d1" in job_scopes
-    assert "storage.modify:/mu2e/scratch/users/username/out2/d2" in job_scopes
-    assert "foo" in job_scopes
-    assert "bar" in job_scopes
+    added_scopes = [
+        "storage.modify:/mu2e/scratch/users/username/out1/d1",
+        "storage.modify:/mu2e/scratch/users/username/out2/d2",
+        "storage.stage:/mu2e/scratch/users/username/stage1",
+        "storage.stage:/mu2e/scratch/users/username/stage2",
+        "foo",
+        "bar",
+    ]
+    for sc in added_scopes:
+        assert sc in job_scopes
+
     # check things that should still be there from original
-    assert "storage.create:/mu2e/scratch/users/username" in job_scopes
-    assert "compute.modify" in job_scopes
+    orig_scopes = [
+        "storage.create:/mu2e/scratch/users/username",
+        "compute.modify",
+    ]
+    for sc in orig_scopes:
+        assert sc in job_scopes
+
     # check things that should NOT still be there from original
-    assert "storage.modify:/mu2e/scratch/users/username" not in job_scopes
+    removed_scopes = [
+        "storage.modify:/mu2e/scratch/users/username",
+        "storage.stage:/mu2e/scratch/users/username",
+    ]
+    for sc in removed_scopes:
+        assert sc not in job_scopes
+
+
+def test_get_job_scopes_env(monkeypatch):
+    """If we specify our list of scopes to clean out via JOBSUB_SCOPES_DROP env variable, make sure that works"""
+    # sample mu2e token with modify generated from https://demo.scitokens.org/. The scopes in that token are:
+    # storage.modify:/mu2e/scratch/users/username/out1/d1
+    # storage.modify:/mu2e/scratch/users/username/out1/d2
+    # foo
+    # bar
+    # storage.create:/mu2e/scratch/users/username
+    # compute.modify
+    # storage.modify:/mu2e/scratch/users/username
+    # storage.stage:/mu2e/scratch/users/username
+    tokenf = "decode_token_tests/mp1"
+
+    # Set env variable to drop storage.create scopes
+    monkeypatch.setenv("JOBSUB_SCOPES_DROP", "storage.create")
+    job_scopes = token_mods.get_job_scopes(tokenf)
+    print(f"got job scopes: {repr(job_scopes)}")
+
+    # This is what should be left:
+    should_exist = [
+        "storage.modify:/mu2e/scratch/users/username/out1/d1",
+        "storage.modify:/mu2e/scratch/users/username/out1/d2",
+        "foo",
+        "bar",
+        "compute.modify",
+        "storage.modify:/mu2e/scratch/users/username",
+        "storage.stage:/mu2e/scratch/users/username",
+    ]
+    for sc in should_exist:
+        assert sc in job_scopes
+
+    assert "storage.create:/mu2e/scratch/users/username" not in job_scopes
 
 
 def test_get_token_scope_1(sample_sl):
@@ -84,24 +149,28 @@ def test_scope_without_1(sample_sl):
 
 def test_add_subpath_scope_1(sample_sl):
     """test adding allowed weaker storage scopes"""
+    # sample_sl doesn't have a modify scope, so add it to the scopes list so we can test
     sctyp = "storage.modify"
     scpath = "/dune/scratch/users/username"
     scsubdir1 = scpath + "/sub/directory"
     scsubdir2 = scpath + "/other/directory"
-    orig_scl = sample_sl + ["{sctyp}:{scpath}"]
+    orig_scl = sample_sl + [f"{sctyp}:{scpath}"]
 
     nscl = token_mods.add_subpath_scope(sctyp, scsubdir1, sample_sl, orig_scl)
     nscl = token_mods.add_subpath_scope(sctyp, scsubdir2, nscl, orig_scl)
 
-    assert "{sctyp}:{scsubdir1}" in nscl
-    assert "{sctyp}:{scsubdir2}" in nscl
+    assert f"{sctyp}:{scsubdir1}" in nscl
+    assert f"{sctyp}:{scsubdir2}" in nscl
 
 
-def test_add_subpath_scope_1(sample_sl):
+def test_add_subpath_scope_2(sample_sl):
+    """test where adding a scope that is NOT a subpath of an original scope raises PermissionError"""
+    # sample_sl doesn't have a modify scope, so add it to the scopes list so we can test
     sctyp = "storage.modify"
     scpath = "/dune/scratch/users/username"
-    scsubdir = scpath + "/sub/directory"
-    orig_scl = sample_sl + ["{sctyp}:{scpath}"]
+    orig_scl = sample_sl + [f"{sctyp}:{scpath}"]
+
+    scsubdir = "/other/path/not/allowed"
 
     with pytest.raises(PermissionError):
-        nscl = token_mods.add_subpath_scope(sctyp, scpath, sample_sl, orig_scl)
+        token_mods.add_subpath_scope(sctyp, scsubdir, sample_sl, orig_scl)

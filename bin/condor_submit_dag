@@ -17,7 +17,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" wrapper for condor_submit_dag """
+"""wrapper for condor_submit_dag"""
 # pylint: disable=wrong-import-position,wrong-import-order,import-error
 import hashlib
 import sys
@@ -86,7 +86,10 @@ def main():
         varg["token"] = cred_set.token
         varg["job_scope"] = " ".join(
             get_job_scopes(
-                cred_set.token, arglist.need_storage_modify, arglist.need_scope
+                cred_set.token,
+                arglist.need_storage_modify,
+                arglist.need_storage_stage,
+                arglist.need_scope,
             )
         )
         m = hashlib.sha256()

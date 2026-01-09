@@ -210,6 +210,7 @@ def jobsub_submit_args(
             get_job_scopes(
                 cred_set.token,
                 getattr(args, "need_storage_modify", []),
+                getattr(args, "need_storage_stage", []),
                 getattr(args, "need_scope", []),
             )
         )
