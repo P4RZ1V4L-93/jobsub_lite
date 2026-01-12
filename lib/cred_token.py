@@ -25,8 +25,13 @@ from typing import Union, Optional, List, Tuple, Any
 
 # pylint: disable=import-error
 import jwt  # type: ignore
-import htcondor  # type: ignore # pylint: disable=wrong-import-position
 import scitokens  # type: ignore
+
+try:
+    import htcondor2 as htcondor  # type: ignore # pylint: disable=wrong-import-position # Condor 25 and later
+except ImportError:
+    import htcondor  # type: ignore # pylint: disable=wrong-import-position # Condor 24 and earlier
+
 
 from defaults import DEFAULT_ROLE  # pylint: disable=wrong-import-position
 from tracing import as_span, add_event  # pylint: disable=wrong-import-position

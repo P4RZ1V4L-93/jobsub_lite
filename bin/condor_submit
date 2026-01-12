@@ -17,7 +17,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" wrapper for condor submit """
+"""wrapper for condor submit"""
 # pylint: disable=wrong-import-position,wrong-import-order,import-error
 import sys
 import os
@@ -28,7 +28,10 @@ if os.environ.get("LD_LIBRARY_PATH", ""):
     del os.environ["LD_LIBRARY_PATH"]
     os.execv(sys.argv[0], sys.argv)
 
-import htcondor
+try:
+    import htcondor2 as htcondor  # Condor 25 and later
+except ImportError:
+    import htcondor  # Condor 24 and earlier
 
 #
 # we are in prefix/bin/jobsub_submit, so find our prefix
