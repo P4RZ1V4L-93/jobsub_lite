@@ -2,19 +2,28 @@
 
 . /cvmfs/fermilab.opensciencegrid.org/products/common/etc/setups.sh
 
-setup fife_utils
-setup hypotcode
+spack load --first fife-utils@3.7.7 os=default_os
+spack load --first hypotcode@2.1 os=default_os
 
-for e in samdev nova dune
+HYPOTCODE_DIR=$( spack location -i hypotcode@2.1 os=default_os)
+
+#for e in hypot nova dune
+for e in hypot
 do
    case $e in
    samdev) g=fermilab/users;;
    *)      g=$e/scratch/users;;
    esac
 
+   te=$e
+   se=$e
+
+   if [ "$te" == "samdev" ] ; then te=fermilab; fi
+   if [ "$se" == "hypot" ] ; then se=samdev; fi
+
    echo "checking $e files in $g..."
 
-    srcf=$HYPOTCODE_DIR/fcl/gen_nova.fcl
+    srcf=$HYPOTCODE_DIR/fcl/gen.fcl
     ddir=/pnfs/$g/$USER/poms_test/gen_cfg
     flist="
         c47fe3af-8fdb-4a5a-a110-3f3d52f3cfea-a.fcl
@@ -146,17 +155,20 @@ EOF
     }
 EOF
 
-    for i in a b c d e; do samweb -e $e declare-file $i.json; done
+
+    htgettoken -i $te -a htvaultprod.fnal.gov
+
+    for i in a b c d e; do samweb -e $se declare-file $i.json; done
 
 
     export IFDH_CP_MAXRETRIES=0
     for f in $flist
     do
        ifdh cp $srcf $ddir/$f
-       samweb -e $e add-file-location $f dcache:$ddir
+       samweb -e $se add-file-location $f dcache:$ddir
     done
 
-    sam_validate_dataset -e $e -n gen_cfg -v
+    sam_validate_dataset -e $se -n gen_cfg -v
 
     rm -rf /tmp/dat$$
 
