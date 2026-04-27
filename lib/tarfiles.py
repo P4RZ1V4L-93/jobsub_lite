@@ -537,7 +537,7 @@ class TarfilePublisherHandler:
                 # Default value for restore_func.  In reality we won't use this value at all if should_change_selector_behavior is False
                 restore_func: Callable[
                     ..., Iterator[str]
-                ] = lambda: self._dropbox_server_selector  # type: ignore
+                ] = lambda: self._dropbox_server_selector
 
                 if should_change_selector_behavior:
                     restore_func = (
