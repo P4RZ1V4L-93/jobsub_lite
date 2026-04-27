@@ -29,12 +29,15 @@ import time
 from typing import Union, Dict, Any, NamedTuple, Tuple, List, Optional
 import uuid
 
-import classad  # type: ignore # pylint: disable=import-error
-from tracing import get_propagator_carrier  # pylint: disable=wrong-import-position
+try:  # Condor 25 and later
+    import classad2 as classad  # type: ignore # pylint: disable=import-error
+except ImportError:  # Condor 24 and earlier
+    import classad  # type: ignore # pylint: disable=import-error
 
 from creds import CredentialSet
 from defaults import DEFAULT_SINGULARITY_IMAGE, DEFAULT_USAGE_MODELS, ONSITE_SITE_NAME
 import token_mods
+from tracing import get_propagator_carrier
 import version
 
 

@@ -26,8 +26,13 @@ import time
 from typing import Dict, List, Any, Tuple, Optional, Union, Generator
 
 # pylint: disable=import-error
-import classad  # type: ignore
-import htcondor  # type: ignore
+try:  # Condor 25 and later
+    import classad2 as classad  # type: ignore
+    import htcondor2 as htcondor  # type: ignore
+except ImportError:  # Condor 24 and earlier
+    import classad  # type: ignore
+    import htcondor  # type: ignore
+
 import jinja2  # type: ignore
 
 import defaults
@@ -161,7 +166,7 @@ def get_schedd_list(
 
     # Get schedd ads from collector and store them in memory
     schedds: List[classad.ClassAd] = coll.query(
-        htcondor.htcondor.AdTypes.Schedd,
+        htcondor.AdTypes.Schedd,
         constraint=schedd_constraint,
     )
 
@@ -568,7 +573,7 @@ class Job:
             return f"{self.seq}@{self.schedd}"
         return f"{self.seq}.{self.proc}@{self.schedd}"
 
-    def _get_schedd(self) -> htcondor.htcondor.Schedd:
+    def _get_schedd(self) -> htcondor.Schedd:
         c = htcondor.Collector(COLLECTOR_HOST)
         s = c.locate(htcondor.DaemonTypes.Schedd, self.schedd)
         if s is None:

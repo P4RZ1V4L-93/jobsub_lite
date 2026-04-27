@@ -30,9 +30,14 @@ import get_parser
 
 from utils import cleanup
 import version
-import htcondor  # type: ignore # pylint: disable=wrong-import-position
 import creds
 import requests  # type: ignore
+
+try:
+    import htcondor2 as htcondor  # type: ignore # pylint: disable=wrong-import-position # Condor 25 and later
+except ImportError:
+    import htcondor  # type: ignore # pylint: disable=wrong-import-position # Condor 24 and earlier
+
 
 from .common import VERBOSE
 

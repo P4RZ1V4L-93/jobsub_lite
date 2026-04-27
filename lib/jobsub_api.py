@@ -6,7 +6,13 @@ import time
 import contextlib
 from datetime import datetime, timedelta
 from io import StringIO
-from htcondor import JobStatus  # type: ignore #pylint: disable=import-error
+
+try:  # Condor 25 and later
+    from htcondor2 import JobStatus  # type: ignore #pylint: disable=import-error
+except ImportError:  # Condor 24 and earlier
+    from htcondor import JobStatus  # type: ignore #pylint: disable=import-error
+
+
 from mains import jobsub_submit_main, jobsub_fetchlog_main, jobsub_cmd_main
 from condor import Job
 from tracing import as_span
