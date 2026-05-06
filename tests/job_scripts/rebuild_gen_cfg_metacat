@@ -37,7 +37,7 @@ fi
 metacat dataset create  $USER:gen_cfg "job configs for hypotcode tests"
 
 srcf=$HYPOTCODE_DIR/fcl/gen_nova.fcl
-ddir=/pnfs/fermilab/volatile/$USER/poms_test/gen_cfg
+ddir=/pnfs/fermilab/users/$USER/poms_test/gen_cfg
 flist="
 $USER:a.fcl
 $USER:b.fcl

@@ -56,7 +56,7 @@ def add_links():
 def job_envs():
     os.environ["IFDH_DEBUG"] = "1"
     os.environ["IFDH_FORCE"] = "https"
-    os.environ["IFDH_VERSION"] = "v2_6_10,ifdhc_config v2_6_15"
+    os.environ["IFDH_VERSION"] = "v2_8_0"
     os.environ["IFDH_TOKEN_ENABLE"] = "1"
     os.environ["IFDH_PROXY_ENABLE"] = "0"
     os.environ["IFDH_CP_MAXRETRIES"] = "2"
@@ -102,6 +102,12 @@ def dune(job_envs):
     os.environ["EXPERIMENT"] = "dune"
     os.environ["SAM_EXPERIMENT"] = "dune"
     os.environ["SAM_STATION"] = "dune"
+    save_output_url = os.environ["JOBSUB_OUTPUT_URL"]
+    os.environ[
+        "JOBSUB_OUTPUT_URL"
+    ] = "https://fndcadoor.fnal.gov:2880/dune/persistent/jobsub/jobs"
+    yield ""
+    os.environ["JOBSUB_OUTPUT_URL"] = save_output_url
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@
 # debug
 universe           = vanilla
 executable         = simple.sh
-arguments          = --find_setups --prescript-unquote echo%20JOBSUBJOBSECTION%20is%20%24%7BJOBSUBJOBSECTION%7D --setup-unquote hypotcode%20v1_1 --setup-unquote ifdhc%20v2_7_2%2C%20ifdhc_config%20v2_6_15 --self_destruct_timer 700 --debug --getconfig --limit 1 --appvers v1_1 --metadata_extractor hypot_metadata_extractor --addoutput gen.troot --rename unique --dest /pnfs/fermilab/users/$ENV(USER)/dropbox --add_location --declare_metadata --addoutput1 hist_gen.troot --rename1 unique --dest1 /pnfs/fermilab/users/$ENV(USER)/dropbox --add_location1 --declare_metadata1 --exe hypot.exe -- -o gen.troot -c hist_gen.troot
+arguments          = --find_setups --prescript-unquote echo%20JOBSUBJOBSECTION%20is%20%24%7BJOBSUBJOBSECTION%7D --setup-unquote hypotcode%20v1_1 --setup-unquote ifdhc%20v2_8_0%2C%20ifdhc_config%20v2_8_0 --self_destruct_timer 700 --debug --getconfig --limit 1 --appvers v1_1 --metadata_extractor hypot_metadata_extractor --addoutput gen.troot --rename unique --dest /pnfs/fermilab/users/$ENV(USER)/dropbox --add_location --declare_metadata --addoutput1 hist_gen.troot --rename1 unique --dest1 /pnfs/fermilab/users/$ENV(USER)/dropbox --add_location1 --declare_metadata1 --exe hypot.exe -- -o gen.troot -c hist_gen.troot
 
 output             = fife_wrap$ENV(DATETIME)$ENV(UUID)cluster.$(Cluster).$(Process).out
 error              = fife_wrap$ENV(DATETIME)$ENV(UUID)cluster.$(Cluster).$(Process).err
@@ -11,7 +11,7 @@ log                = fife_wrap$ENV(DATETIME)$ENV(UUID)cluster.$(Cluster).$(Proce
 
 
 getenv             = SAM_PROJECT,USER,DN
-environment        = CM1=$(CM1);CM2=$(CM2);CLUSTER=$(Cluster);PROCESS=$(Process);JOBSUBJOBSECTION=$(JOBSUBJOBSECTION);CONDOR_TMP=/home/$ENV(USER)/.cache/jobsub_lite/js_$ENV(DATETIME)_$ENV(UUID);BEARER_TOKEN_FILE=.condor_creds/fermilab_b355f5a23c.use;CONDOR_EXEC=/tmp;DAGMANJOBID=$(DAGManJobId);GRID_USER=$ENV(USER);JOBSUBJOBID=$(CLUSTER).$(PROCESS)@jobsubdevgpvm01.fnal.gov;EXPERIMENT=fermilab;EXPERIMENT=samdev;IFDH_DEBUG=1;IFDH_VERSION=v2_6_10;IFDH_TOKEN_ENABLE=1;IFDH_PROXY_ENABLE=0;SAM_EXPERIMENT=samdev;SAM_GROUP=samdev;SAM_STATION=samdev;IFDH_CP_MAXRETRIES=2;VERSION=v1_1;SAM_DATASET=gen_cfg;SAM_USER=$ENV(USER);DATE=$ENV(DATE);UUID=$ENV(UUID)
+environment        = CM1=$(CM1);CM2=$(CM2);CLUSTER=$(Cluster);PROCESS=$(Process);JOBSUBJOBSECTION=$(JOBSUBJOBSECTION);CONDOR_TMP=/home/$ENV(USER)/.cache/jobsub_lite/js_$ENV(DATETIME)_$ENV(UUID);BEARER_TOKEN_FILE=.condor_creds/fermilab_b355f5a23c.use;CONDOR_EXEC=/tmp;DAGMANJOBID=$(DAGManJobId);GRID_USER=$ENV(USER);JOBSUBJOBID=$(CLUSTER).$(PROCESS)@jobsubdevgpvm01.fnal.gov;EXPERIMENT=fermilab;EXPERIMENT=samdev;IFDH_DEBUG=1;IFDH_VERSION=v2_8_0;IFDH_TOKEN_ENABLE=1;IFDH_PROXY_ENABLE=0;SAM_EXPERIMENT=samdev;SAM_GROUP=samdev;SAM_STATION=samdev;IFDH_CP_MAXRETRIES=2;VERSION=v1_1;SAM_DATASET=gen_cfg;SAM_USER=$ENV(USER);DATE=$ENV(DATE);UUID=$ENV(UUID)
 rank               = Mips / 2 + Memory
 job_lease_duration = 3600
 transfer_output    = True
