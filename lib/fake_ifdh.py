@@ -135,14 +135,16 @@ if __name__ == "__main__":
         if opts.command[0] in ("cp", "ls", "mkdir_p", "checkToken"):
             print(commands[opts.command[0]](*opts.cpargs[0]))  # type: ignore
         else:
-            result = commands[opts.command[0]](myrole, verbose=1)  # type: ignore
+            result = commands[opts.command[0]](role=myrole, verbose=1)  # type: ignore
             if result is not None:
                 print(result)
     except PermissionError as pe:
         sys.stderr.write(str(pe) + "\n")
         print("")
+        sys.exit(1)
     except KeyError:
         print(
             "An invalid command to fake_ifdh was given.  Please select from "
             f'one of the following: {", ".join(commands.keys())}'
         )
+        sys.exit(1)

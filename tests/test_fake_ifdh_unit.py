@@ -1,5 +1,7 @@
 from collections import namedtuple
 import os
+import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -137,3 +139,41 @@ def test_ls(tmp_path):
     result = fake_ifdh.ls(str(test_dir))
     expected_files = {"file1.txt", "file2.txt", "file3.txt"}
     assert set(result) == expected_files
+
+
+class TestMain:
+    path_to_fake_ifdh = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "lib/fake_ifdh.py")
+    )
+
+    @pytest.mark.unit
+    def test_main_invalid_command(self):
+        result = subprocess.run(
+            [self.path_to_fake_ifdh, "invalid_command"], capture_output=True, text=True
+        )
+        assert result.returncode != 0
+        assert (
+            "An invalid command to fake_ifdh was given.  Please select from one of the following: getProxy, getToken, checkToken, cp, ls, mkdir_p, getRole"
+            in result.stdout
+        )
+
+    @pytest.mark.integration
+    def test_main_getToken_bad(self, monkeypatch):
+        monkeypatch.setenv("GROUP", "BOGUS")
+        result = subprocess.run(
+            [self.path_to_fake_ifdh, "getToken"], capture_output=True, text=True
+        )
+        assert result.returncode != 0
+        assert "htgettoken: Failure getting token" in result.stderr
+        assert "BOGUS" in result.stderr
+
+    @pytest.mark.integration
+    def test_main_getToken(self, set_group_fermilab):
+        result = subprocess.run(
+            [self.path_to_fake_ifdh, "getToken"], capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        bt_path = result.stdout.strip()
+        assert (
+            os.path.getsize(bt_path) > 0
+        )  # We should have a token here, so it should be a non-zero size file
