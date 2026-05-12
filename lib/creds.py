@@ -131,15 +131,15 @@ def resolve_auth_methods(arg_auth_method: Optional[str]) -> List[str]:
 
 # pylint: disable=unused-argument
 @as_span("getRole")
-def getRole(role_override: Optional[str] = None, verbose: int = 0) -> str:
+def getRole(role: Optional[str] = None, verbose: int = 0) -> str:
     """get current role.  Will check the following in order:
-    1. role_override
+    1. Given role (meant for override)
     2. default role file
     3. Existing valid token
     4. Use default
     """
-    if role_override:
-        return role_override
+    if role:
+        return role
 
     # Once we get to python 3.8, this can be changed to if (_role := getRole_from_default_role_file()): return _role,
     # and same for getRole_from_valid_token.  IMO, that's a bit clearer than this loop
